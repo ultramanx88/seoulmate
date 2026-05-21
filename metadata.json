@@ -1,0 +1,6 @@
+{
+  "name": "SEOULMATE",
+  "description": "A cross-cultural social dating platform connecting Thai and Korean users through community, matching, and AI-powered cultural bridge tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["AI Translation", "Community Feed", "Smart Matching"]
+}

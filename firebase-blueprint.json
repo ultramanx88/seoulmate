@@ -1,0 +1,140 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Represents a user in the SEOULMATE platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "nationality": { "type": "string", "enum": ["TH", "KR"] },
+        "bio": { "type": "string" },
+        "interests": { "type": "array", "items": { "type": "string" } },
+        "languages": { "type": "array", "items": { "type": "string" } },
+        "intent": { "type": "string", "enum": ["dating", "friendship", "exchange"] },
+        "personalityScore": { "type": "object" },
+        "lastActiveAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "nationality", "intent"]
+    },
+    "Topic": {
+      "title": "Community Topic",
+      "description": "A ranked community discussion topic.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "intent": { "type": "string", "enum": ["dating", "friend", "language", "event"] },
+        "location": { "type": "object" },
+        "commentCount": { "type": "integer" },
+        "joinCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "intent", "createdAt"]
+    },
+    "PrecomputedFeed": {
+      "title": "Precomputed Feed",
+      "description": "A pre-ranked list of topics for a specific user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "topics": { "type": "array", "items": { "type": "object" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "topics", "updatedAt"]
+    },
+
+    "Post": {
+      "title": "Community Post",
+      "description": "A post in the community feed.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "imageURL": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "content", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat Session",
+      "description": "A persistent chat session between users.",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "matchId": { "type": "string" }
+      },
+      "required": ["participants", "lastMessageAt"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "An individual message within a chat.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "translation": {
+          "type": "object",
+          "properties": {
+            "th": { "type": "string" },
+            "kr": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "senderId", "text", "createdAt"]
+    },
+    "Comment": {
+      "title": "Post Comment",
+      "description": "A comment on a community post.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/topics/{topicId}": {
+      "schema": "Topic",
+      "description": "Community Topics"
+    },
+    "/precomputed_feeds/{userId}": {
+      "schema": "PrecomputedFeed",
+      "description": "Precomputed ranked feeds"
+    },
+
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Community posts"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a post"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Chat sessions"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages in a chat"
+    }
+  }
+}
