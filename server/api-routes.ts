@@ -35,6 +35,7 @@ type ProviderProfile = {
 
 const sessionCookieName = 'seoulmate_auth_session';
 const sessionTtlSeconds = 60 * 60 * 24 * 7;
+const oauthStateTtlSeconds = 60 * 10;
 const oauthProviders = ['google', 'line', 'kakao', 'naver'] as const;
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -163,6 +164,38 @@ async function createSession(request: Request, response: Response, userId: strin
     ],
   );
   response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, sessionId, { maxAge: sessionTtlSeconds }));
+}
+
+async function saveOAuthState(request: Request, provider: AuthProvider, state: string): Promise<void> {
+  await database.query(
+    `
+      INSERT INTO oauth_states (state, provider, user_agent, ip_address, expires_at)
+      VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 second'))
+    `,
+    [
+      state,
+      provider,
+      request.headers['user-agent'] ?? null,
+      request.ip,
+      oauthStateTtlSeconds,
+    ],
+  );
+}
+
+async function consumeOAuthState(provider: AuthProvider, state: string): Promise<boolean> {
+  const result = await database.query(
+    `
+      UPDATE oauth_states
+      SET consumed_at = now()
+      WHERE provider = $1
+        AND state = $2
+        AND consumed_at IS NULL
+        AND expires_at > now()
+      RETURNING state
+    `,
+    [provider, state],
+  );
+  return Boolean(result.rowCount);
 }
 
 async function upsertProviderUser(profile: ProviderProfile): Promise<AppUserRow> {
@@ -414,7 +447,7 @@ function topicJson(row: any, author: AppUserRow | null = null) {
 export function createApiRouter(): Router {
   const router = express.Router();
 
-  router.get('/v1/auth/:provider/start', (request, response) => {
+  router.get('/v1/auth/:provider/start', async (request, response) => {
     const { provider } = request.params;
     if (!isProvider(provider)) {
       response.status(404).json({ error: 'UNKNOWN_PROVIDER' });
@@ -425,11 +458,12 @@ export function createApiRouter(): Router {
       return;
     }
     const state = randomUUID();
+    await saveOAuthState(request, provider, state);
     response.setHeader(
       'Set-Cookie',
       serializeCookie(`seoulmate_oauth_state_${provider}`, state, {
         path: `/v1/auth/${provider}`,
-        maxAge: 600,
+        maxAge: oauthStateTtlSeconds,
       }),
     );
     response.redirect(buildAuthorizeUrl(provider, state));
@@ -444,7 +478,9 @@ export function createApiRouter(): Router {
     const code = typeof request.query.code === 'string' ? request.query.code : '';
     const state = typeof request.query.state === 'string' ? request.query.state : '';
     const expectedState = parseCookies(request.headers.cookie)[`seoulmate_oauth_state_${provider}`];
-    if (!code || !state || state !== expectedState) {
+    const cookieStateValid = Boolean(state && expectedState && state === expectedState);
+    const storedStateValid = state ? await consumeOAuthState(provider, state) : false;
+    if (!code || !state || (!cookieStateValid && !storedStateValid)) {
       response.redirect(authFailureUrl('invalid_state'));
       return;
     }
@@ -497,11 +533,11 @@ export function createApiRouter(): Router {
       `
         UPDATE users
         SET
-          display_name = COALESCE(NULLIF($2, ''), display_name),
-          nationality = $3,
-          intent = $4,
-          bio = $5,
-          is_profile_complete = ($3 IS NOT NULL AND $4 IS NOT NULL),
+          display_name = COALESCE(NULLIF($2::text, ''), display_name),
+          nationality = $3::text,
+          intent = $4::text,
+          bio = $5::text,
+          is_profile_complete = ($3::text IS NOT NULL AND $4::text IS NOT NULL),
           last_active_at = now()
         WHERE id = $1
         RETURNING *
