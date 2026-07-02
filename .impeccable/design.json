@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-01T00:00:00+07:00",
+  "title": "Design System: SEOULMATE",
+  "extensions": {
+    "northStar": "Clean Seoul Signal",
+    "colorMeta": {
+      "brand-coral": {
+        "role": "primary",
+        "displayName": "Controlled Coral",
+        "canonical": "oklch(0.68 0.19 23)",
+        "hex": "#e9524f",
+        "usage": "Primary actions, active states, brand connection moments."
+      },
+      "brand-ink": {
+        "role": "neutral",
+        "displayName": "Trust Ink",
+        "canonical": "oklch(0.25 0.07 282)",
+        "hex": "#332b5f",
+        "usage": "Brand contrast, headings, trustworthy structure."
+      },
+      "brand-mint": {
+        "role": "secondary",
+        "displayName": "Fresh Mint",
+        "canonical": "oklch(0.77 0.12 177)",
+        "hex": "#60cdb8",
+        "usage": "Safety, exchange, freshness, success moments."
+      },
+      "brand-lilac": {
+        "role": "secondary",
+        "displayName": "Soft Lilac",
+        "canonical": "oklch(0.94 0.04 286)",
+        "hex": "#f1edff",
+        "usage": "Soft Seoul-modern grouping and selected secondary surfaces."
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Clean Surface",
+        "canonical": "oklch(0.985 0.012 73)",
+        "hex": "#fffaf2",
+        "usage": "App background; keep clean and subtle."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Bilingual Display",
+        "purpose": "Major landing and onboarding moments only."
+      },
+      "body": {
+        "displayName": "Bilingual Body",
+        "purpose": "Thai, Korean, and English content with equal readability."
+      },
+      "label": {
+        "displayName": "Product Label",
+        "purpose": "Tabs, chips, metadata, and compact controls."
+      }
+    },
+    "elevation": {
+      "soft-card-lift": "0 18px 48px oklch(0.68 0.19 23 / 12%)",
+      "raised-moment": "0 24px 70px oklch(0.25 0.07 282 / 16%)",
+      "action-glow": "0 14px 34px oklch(0.68 0.19 23 / 24%)"
+    },
+    "rules": [
+      "Coral/rose should guide action and affection, not become a sugary dating-app wash.",
+      "Prefer clean off-white, ink, and restrained accent placement over heavy gradients.",
+      "Never sacrifice Thai or Korean readability for compact Latin-only rhythm.",
+      "Elevation clarifies hierarchy and touch targets; it is not decoration."
+    ]
+  }
+}

@@ -6,9 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-seoulmate}
       POSTGRES_USER: ${POSTGRES_USER:-seoulmate}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,13 +24,11 @@ services:
       - --appendonly
       - "yes"
       - --requirepass
-      - ${REDIS_PASSWORD:-change-me}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change-me}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -46,33 +42,34 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      APP_VERSION: ${APP_VERSION:-local}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-seoulmate}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-seoulmate}
+      APP_VERSION: ${APP_VERSION:-kvm1}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-seoulmate}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-seoulmate}
       DATABASE_SSL: "false"
       DATABASE_POOL_MIN: ${DATABASE_POOL_MIN:-2}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-change-me}@redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       REDIS_REQUIRED: "true"
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
-      APP_URL: ${APP_URL:-http://localhost:8080}
-      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-}
-      AUTH_SUCCESS_URL: ${AUTH_SUCCESS_URL:-http://localhost:3000}
-      AUTH_FAILURE_URL: ${AUTH_FAILURE_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      TRUST_PROXY: "true"
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
+      APP_URL: ${APP_URL:?APP_URL is required}
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:?AUTH_SESSION_SECRET is required}
+      AUTH_SUCCESS_URL: ${AUTH_SUCCESS_URL:-}
+      AUTH_FAILURE_URL: ${AUTH_FAILURE_URL:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/v1/auth/google/callback}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
       LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-}
       LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
-      LINE_REDIRECT_URI: ${LINE_REDIRECT_URI:-http://localhost:8080/v1/auth/line/callback}
+      LINE_REDIRECT_URI: ${LINE_REDIRECT_URI:-}
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
-      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8080/v1/auth/kakao/callback}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
-      NAVER_REDIRECT_URI: ${NAVER_REDIRECT_URI:-http://localhost:8080/v1/auth/naver/callback}
+      NAVER_REDIRECT_URI: ${NAVER_REDIRECT_URI:-}
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3220}:8080"
     depends_on:
       postgres:
         condition: service_healthy

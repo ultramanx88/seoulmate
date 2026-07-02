@@ -4,6 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { config } from './config.js';
+import { createApiRouter } from './api-routes.js';
 import { checkDatabase } from './database.js';
 import { checkRedis } from './redis.js';
 
@@ -74,9 +75,11 @@ export function createApp() {
     response.json({
       service: 'seoulmate-api',
       version: config.APP_VERSION,
-      migrationPhase: 'firebase-dual-run',
+      migrationPhase: 'postgres-api-auth',
     });
   });
+
+  app.use(createApiRouter());
 
   const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
   const staticDirectory = path.resolve(currentDirectory, '../../dist');

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, where, getDocs, limit, addDoc, serverTimestamp, and, or } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
+import { apiRequest } from '../lib/api';
 import { Card, CardContent } from './ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
-import { Heart, X, MessageCircle, MapPin } from 'lucide-react';
+import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -17,19 +16,14 @@ export default function Explore() {
   useEffect(() => {
     const fetchUsers = async () => {
       if (!profile) return;
-      
-      const targetNationality = profile.nationality === 'TH' ? 'KR' : 'TH';
-      const q = query(
-        collection(db, 'users'), 
-        where('nationality', '==', targetNationality),
-        limit(20)
-      );
-      
-      const snapshot = await getDocs(q);
-      const docs = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as any))
-        .filter(u => u.uid !== auth.currentUser?.uid);
-      setUsers(docs);
+
+      try {
+        const result = await apiRequest<{ users: any[] }>('/v1/users/discover');
+        setUsers(result.users);
+      } catch (error) {
+        console.error(error);
+        toast.error("No souls found yet");
+      }
     };
     
     fetchUsers();
@@ -37,15 +31,9 @@ export default function Explore() {
 
   const startChat = async (targetUser: any) => {
     try {
-      const chatRef = collection(db, 'chats');
-      const participants = [auth.currentUser?.uid, targetUser.uid].sort();
-      
-      // Check if chat already exists (simplified for now)
-      const newChat = await addDoc(chatRef, {
-        participants,
-        lastMessage: "Connected! Say hello.",
-        lastMessageAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
+      await apiRequest('/v1/chats', {
+        method: 'POST',
+        body: JSON.stringify({ userId: targetUser.uid ?? targetUser.id }),
       });
       
       toast.success(`Connected with ${targetUser.displayName}!`);

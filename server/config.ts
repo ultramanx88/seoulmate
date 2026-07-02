@@ -20,6 +20,22 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   TRUST_PROXY: booleanFromString,
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+  APP_URL: z.string().default('http://localhost:8080'),
+  AUTH_SESSION_SECRET: z.string().default(''),
+  AUTH_SUCCESS_URL: z.string().default(''),
+  AUTH_FAILURE_URL: z.string().default(''),
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GOOGLE_CLIENT_SECRET: z.string().default(''),
+  GOOGLE_REDIRECT_URI: z.string().default(''),
+  LINE_CHANNEL_ID: z.string().default(''),
+  LINE_CHANNEL_SECRET: z.string().default(''),
+  LINE_REDIRECT_URI: z.string().default(''),
+  KAKAO_REST_API_KEY: z.string().default(''),
+  KAKAO_CLIENT_SECRET: z.string().default(''),
+  KAKAO_REDIRECT_URI: z.string().default(''),
+  NAVER_CLIENT_ID: z.string().default(''),
+  NAVER_CLIENT_SECRET: z.string().default(''),
+  NAVER_REDIRECT_URI: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

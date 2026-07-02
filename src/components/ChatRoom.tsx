@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
+import { apiRequest } from '../lib/api';
 import { geminiService } from '../services/gemini';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -20,18 +19,21 @@ export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'chats', chatId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMessages(docs);
+    let cancelled = false;
+    const fetchMessages = async () => {
+      const result = await apiRequest<{ messages: any[] }>(`/v1/chats/${chatId}/messages`);
+      if (cancelled) return;
+      setMessages(result.messages);
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    });
+    };
 
-    return unsubscribe;
+    fetchMessages().catch(console.error);
+    const timer = window.setInterval(() => fetchMessages().catch(console.error), 4000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [chatId]);
 
   const handleSend = async (textOverride?: string) => {
@@ -40,19 +42,13 @@ export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string
 
     setSending(true);
     try {
-      const msgData = {
-        chatId,
-        senderId: auth.currentUser?.uid,
-        text,
-        createdAt: serverTimestamp(),
-      };
-
-      await addDoc(collection(db, 'chats', chatId, 'messages'), msgData);
-      await updateDoc(doc(db, 'chats', chatId), {
-        lastMessage: text,
-        lastMessageAt: serverTimestamp(),
+      const result = await apiRequest<{ message: any }>(`/v1/chats/${chatId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
       });
+      setMessages((previous) => [...previous, result.message]);
       setNewMessage('');
+      setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (e) {
       toast.error("Failed to send");
     } finally {
@@ -121,7 +117,7 @@ export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string
           )}
           
           {messages.map((msg) => {
-            const isMe = msg.senderId === auth.currentUser?.uid;
+            const isMe = msg.senderId === profile?.uid;
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] space-y-2`}>

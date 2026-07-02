@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { db } from '../lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { apiRequest } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Card, CardContent } from './ui/card';
 import { toast } from 'sonner';
 
 export default function ProfileSetup({ existingProfile }: { existingProfile?: any }) {
@@ -25,17 +23,15 @@ export default function ProfileSetup({ existingProfile }: { existingProfile?: an
 
     setSaving(true);
     try {
-      await setDoc(doc(db, 'users', user!.uid), {
-        uid: user!.uid,
+      await apiRequest('/v1/me/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
         displayName,
-        photoURL: user!.photoURL,
         nationality,
         intent,
         bio,
-        isProfileComplete: true,
-        lastActiveAt: serverTimestamp(),
-        createdAt: existingProfile ? existingProfile.createdAt : serverTimestamp(),
-      }, { merge: true });
+        }),
+      });
       
       await refreshProfile();
       toast.success("Profile saved!");

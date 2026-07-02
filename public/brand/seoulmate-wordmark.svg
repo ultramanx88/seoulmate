@@ -1,0 +1,15 @@
+<svg width="1600" height="480" viewBox="0 0 1600 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="480" rx="96" fill="#FCFAF7"/>
+  <g transform="translate(96 88)">
+    <rect width="304" height="304" rx="72" fill="#FCFAF7" stroke="#1F2428" stroke-width="14"/>
+    <path d="M78 164C78 123.131 111.131 90 152 90C192.869 90 226 123.131 226 164" stroke="#1F2428" stroke-width="22" stroke-linecap="round"/>
+    <path d="M78 164C78 204.869 111.131 238 152 238C192.869 238 226 204.869 226 164" stroke="#E96F67" stroke-width="22" stroke-linecap="round"/>
+    <path d="M99 164H205" stroke="#1F2428" stroke-width="22" stroke-linecap="round"/>
+    <path d="M152 111V217" stroke="#9FD5C8" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="152" cy="164" r="21" fill="#FCFAF7" stroke="#1F2428" stroke-width="12"/>
+  </g>
+  <text x="456" y="235" fill="#1F2428" font-family="Inter, Arial, Helvetica, sans-serif" font-size="112" font-weight="850" letter-spacing="0">SEOUL</text>
+  <text x="842" y="235" fill="#E96F67" font-family="Inter, Arial, Helvetica, sans-serif" font-size="112" font-weight="850" letter-spacing="0">MATE</text>
+  <text x="462" y="304" fill="#5C656B" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="4">THAI + KOREAN SOCIAL SIGNAL</text>
+  <path d="M456 346H770" stroke="#9FD5C8" stroke-width="12" stroke-linecap="round"/>
+</svg>

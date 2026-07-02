@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db, auth, functions } from '../lib/firebase';
-import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDocs, where } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { useAuth, handleFirestoreError, OperationType } from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
+import { apiRequest, parseApiDate } from '../lib/api';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent } from './ui/card';
@@ -37,20 +35,11 @@ export default function Feed() {
   const fetchRankedFeed = async () => {
     setLoading(true);
     try {
-      const getRankedTopics = httpsCallable(functions, 'getRankedTopics');
-      const result = await getRankedTopics();
-      setPosts(result.data as any[]);
-    } catch (e) {
-      console.error("Failed to fetch ranked feed via Function:", e);
-      // Fallback to latest topics
-      try {
-          const q = query(collection(db, 'topics'), orderBy('createdAt', 'desc'), limit(20));
-          const snapshot = await getDocs(q);
-          setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-          handleFirestoreError(err, OperationType.LIST, 'topics');
-          toast.error("Failed to load community topics");
-      }
+      const result = await apiRequest<{ topics: any[] }>('/v1/topics');
+      setPosts(result.topics);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load community topics");
     } finally {
       setLoading(false);
     }
@@ -97,18 +86,15 @@ export default function Feed() {
         postIntent = await geminiService.classifyTopic(postContent);
       }
 
-      await addDoc(collection(db, 'topics'), {
-        authorId: auth.currentUser?.uid,
-        authorName: profile?.displayName,
-        authorPhoto: profile?.photoURL,
-        authorNationality: profile?.nationality,
+      const result = await apiRequest<{ topic: any }>('/v1/topics', {
+        method: 'POST',
+        body: JSON.stringify({
         title: postTitle,
         content: postContent,
         intent: postIntent,
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: serverTimestamp(),
+        }),
       });
+      setPosts((previous) => [result.topic, ...previous]);
       setNewPost('');
       setEnhancedTopic(null);
       toast.success("Moment shared!");
@@ -121,12 +107,15 @@ export default function Feed() {
 
   const handleLike = async (postId: string) => {
     try {
-        const postRef = doc(db, 'topics', postId);
-        await updateDoc(postRef, {
-          likesCount: increment(1)
-        });
-    } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `topics/${postId}`);
+      const result = await apiRequest<{ likesCount: number }>(`/v1/topics/${postId}/like`, {
+        method: 'POST',
+      });
+      setPosts((previous) =>
+        previous.map((post) => (post.id === postId ? { ...post, likesCount: result.likesCount } : post))
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to like moment");
     }
   };
 
@@ -136,11 +125,8 @@ export default function Feed() {
     setMatchingResults([]);
     try {
       const targetNationality = post.authorNationality === 'TH' ? 'KR' : 'TH';
-      const usersRef = collection(db, 'users');
-      // Fetch some potential users to match with
-      const q = query(usersRef, where('nationality', '==', targetNationality), limit(5));
-      const snapshot = await getDocs(q);
-      const potentialUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const result = await apiRequest<{ users: any[] }>(`/v1/users/match-candidates?nationality=${targetNationality}`);
+      const potentialUsers = result.users;
       
       const results = await Promise.all(potentialUsers.map(async (u) => {
         const matchRes = await geminiService.calculateMatchScore(post, u);
@@ -199,12 +185,14 @@ export default function Feed() {
     setSelectedPostForComments(post);
     setNewComment('');
     setReplySuggestions([]);
-    
-    // Fetch comments
-    const commentsQuery = query(collection(db, 'topics', post.id, 'comments'), orderBy('createdAt', 'asc'));
-    const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
-        setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+
+    try {
+      const result = await apiRequest<{ comments: any[] }>(`/v1/topics/${post.id}/comments`);
+      setComments(result.comments);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load whispers");
+    }
 
     // AI Suggestions
     setLoadingSuggestions(true);
@@ -216,25 +204,24 @@ export default function Feed() {
     } finally {
         setLoadingSuggestions(false);
     }
-
-    return unsubscribe;
   };
 
   const handlePostComment = async () => {
     if (!newComment.trim() || !selectedPostForComments) return;
     
     try {
-        const postRef = doc(db, 'topics', selectedPostForComments.id);
-        await addDoc(collection(postRef, 'comments'), {
-            authorId: auth.currentUser?.uid,
-            authorName: profile?.displayName,
-            authorPhoto: profile?.photoURL,
-            text: newComment,
-            createdAt: serverTimestamp(),
+        const result = await apiRequest<{ comment: any }>(`/v1/topics/${selectedPostForComments.id}/comments`, {
+          method: 'POST',
+          body: JSON.stringify({ text: newComment }),
         });
-        await updateDoc(postRef, {
-            commentsCount: increment(1)
-        });
+        setComments((previous) => [...previous, result.comment]);
+        setPosts((previous) =>
+          previous.map((post) =>
+            post.id === selectedPostForComments.id
+              ? { ...post, commentsCount: (post.commentsCount || 0) + 1 }
+              : post
+          )
+        );
         setNewComment('');
         toast.success("Comment whispered!");
     } catch (e) {
@@ -336,7 +323,7 @@ export default function Feed() {
                             </span>
                         </div>
                         <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">
-                            {post.createdAt?.seconds ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}
+                            {parseApiDate(post.createdAt) ? formatDistanceToNow(parseApiDate(post.createdAt)!) + ' ago' : 'Just now'}
 
                             {post.intent && (
                                 <span className="ml-2 text-indigo-400">· {post.intent}</span>

@@ -6,4 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+!.env.kvm1.example
 build/

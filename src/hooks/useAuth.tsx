@@ -1,13 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  User as FirebaseUser 
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { apiRequest, AuthProvider as OAuthProvider, startOAuth } from '../lib/api';
 
 export enum OperationType {
   CREATE = 'create',
@@ -18,53 +10,41 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-  }
-}
-
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+  const errInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-    },
+    authInfo: {},
     operationType,
-    path
-  }
-  console.error('Firestore Error Detailed: ', JSON.stringify(errInfo));
-  // No re-throw here to allow graceful failure if needed, 
-  // but we can throw to stop execution in specific cases.
+    path,
+  };
+  console.error('Legacy data operation error:', JSON.stringify(errInfo));
   return errInfo;
 }
 
 interface UserProfile {
   uid: string;
+  id: string;
+  authProvider?: string;
+  providerSubject?: string | null;
+  email?: string | null;
+  emailVerified?: boolean;
   displayName: string;
   photoURL: string;
+  photoUrl?: string | null;
   nationality?: 'TH' | 'KR';
   intent?: 'dating' | 'friendship' | 'exchange';
   interests?: string[];
+  languages?: string[];
   bio?: string;
   isProfileComplete: boolean;
-  lastActiveAt?: any;
+  lastActiveAt?: string | null;
 }
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: UserProfile | null;
   profile: UserProfile | null;
   loading: boolean;
-  login: () => Promise<void>;
+  login: (provider?: OAuthProvider) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -72,52 +52,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (uid: string) => {
-    const docRef = doc(db, 'users', uid);
+  const refreshProfile = async () => {
     try {
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data() as UserProfile;
-        setProfile(data);
-        // Update lastActiveAt in the background
-        setDoc(docRef, { lastActiveAt: serverTimestamp() }, { merge: true }).catch(err => {
-            console.error("Background activity sync failed:", err);
-        });
-      } else {
-        setProfile(null);
-      }
-    } catch (e) {
-      handleFirestoreError(e, OperationType.GET, `users/${uid}`);
+      const result = await apiRequest<{ user: UserProfile; profile: UserProfile }>('/v1/auth/me');
+      setUser(result.user);
+      setProfile(result.profile);
+    } catch {
+      setUser(null);
+      setProfile(null);
     }
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        await fetchProfile(user.uid);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-    return unsubscribe;
+    refreshProfile().finally(() => setLoading(false));
   }, []);
 
-  const login = async () => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    await fetchProfile(result.user.uid);
+  const login = async (provider: OAuthProvider = 'google') => {
+    startOAuth(provider);
   };
 
-  const logout = () => signOut(auth);
-
-  const refreshProfile = async () => {
-    if (user) await fetchProfile(user.uid);
+  const logout = async () => {
+    await apiRequest('/v1/auth/logout', { method: 'POST' });
+    setUser(null);
+    setProfile(null);
   };
 
   return (

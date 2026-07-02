@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, getDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
+import { apiRequest, parseApiDate } from '../lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
 import ChatRoom from './ChatRoom';
@@ -12,32 +11,22 @@ export default function ChatList() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
-    
-    const q = query(
-      collection(db, 'chats'),
-      where('participants', 'array-contains', auth.currentUser.uid),
-      orderBy('lastMessageAt', 'desc')
-    );
+    if (!profile) return;
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const chatData = await Promise.all(snapshot.docs.map(async (chatDoc) => {
-        const data = chatDoc.data();
-        const otherUserId = data.participants.find((id: string) => id !== auth.currentUser?.uid);
-        
-        // Fetch other user's info
-        const userDoc = await getDoc(doc(db, 'users', otherUserId));
-        return {
-          id: chatDoc.id,
-          ...data,
-          otherUser: { id: otherUserId, ...userDoc.data() }
-        };
-      }));
-      setChats(chatData);
-    });
+    let cancelled = false;
+    const fetchChats = async () => {
+      const result = await apiRequest<{ chats: any[] }>('/v1/chats');
+      if (!cancelled) setChats(result.chats);
+    };
 
-    return unsubscribe;
-  }, []);
+    fetchChats().catch(console.error);
+    const timer = window.setInterval(() => fetchChats().catch(console.error), 10000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [profile]);
 
   if (selectedChatId) {
     const chat = chats.find(c => c.id === selectedChatId);
@@ -74,7 +63,7 @@ export default function ChatList() {
                 </span>
               </span>
               <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">
-                {chat.lastMessageAt?.seconds ? formatDistanceToNow(chat.lastMessageAt.toDate(), { addSuffix: false }) : ''}
+                {parseApiDate(chat.lastMessageAt) ? formatDistanceToNow(parseApiDate(chat.lastMessageAt)!, { addSuffix: false }) : ''}
               </span>
             </div>
             <p className="text-sm text-gray-500 truncate font-bold opacity-80">{chat.lastMessage}</p>
