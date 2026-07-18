@@ -15,6 +15,7 @@ export type AppUserRow = {
   interests: string[];
   languages: string[];
   bio: string | null;
+  safety_status: 'active' | 'suspended' | 'banned' | 'deleted';
   is_profile_complete: boolean;
   last_active_at: Date | null;
   created_at: Date;
@@ -52,6 +53,7 @@ export type PublicUserProfile = {
   interests: string[];
   languages: string[];
   bio: string;
+  safetyStatus: 'active' | 'suspended' | 'banned' | 'deleted';
   isProfileComplete: boolean;
   lastActiveAt: string | null;
   createdAt: string;
@@ -74,6 +76,7 @@ export function toUserProfile(row: AppUserRow): PublicUserProfile {
     interests: row.interests ?? [],
     languages: row.languages ?? [],
     bio: row.bio ?? '',
+    safetyStatus: row.safety_status,
     isProfileComplete: row.is_profile_complete,
     lastActiveAt: row.last_active_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),

@@ -22,6 +22,7 @@ The PostgreSQL schema currently covers:
 - chats, participants, and messages
 - precomputed feeds
 - idempotent Firebase migration tracking
+- safety reports, user blocks, moderation actions, and admin sessions
 
 ## Run the frontend locally
 
@@ -93,6 +94,22 @@ npm run lint
 npm run build:all
 npm run db:migrate
 ```
+
+## Safety and Admin
+
+The admin console is served at `/admin`. Bootstrap the first superadmin by
+setting `ADMIN_SUPER_EMAIL` and `ADMIN_SUPER_PASSWORD` in the runtime
+environment. The server hashes the password with Node crypto before storing it;
+do not commit real admin credentials.
+
+The safety layer includes:
+
+- admin login/session cookies separate from user sessions
+- report queues for users, topics, comments, and messages
+- user block/unblock APIs that remove blocked users from discovery and chats
+- user safety states: active, suspended, banned, deleted
+- content moderation states: visible, hidden, removed
+- moderation action audit records
 
 ## Recommended Firebase cutover order
 

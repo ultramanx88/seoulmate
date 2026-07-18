@@ -4,7 +4,7 @@ import { apiRequest } from '../lib/api';
 import { Card, CardContent } from './ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
-import { X } from 'lucide-react';
+import { Flag, ShieldOff, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -39,6 +39,34 @@ export default function Explore() {
       toast.success(`Connected with ${targetUser.displayName}!`);
     } catch (e) {
       toast.error("Error starting chat");
+    }
+  };
+
+  const reportUser = async (targetUser: any) => {
+    const reason = window.prompt('What should safety review?');
+    if (!reason?.trim()) return;
+    try {
+      await apiRequest('/v1/reports', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'user', targetId: targetUser.uid ?? targetUser.id, reason }),
+      });
+      toast.success('Report sent to safety review');
+    } catch {
+      toast.error('Could not submit report');
+    }
+  };
+
+  const blockUser = async (targetUser: any) => {
+    if (!window.confirm(`Block ${targetUser.displayName}? You will not see or chat with this profile.`)) return;
+    try {
+      await apiRequest(`/v1/users/${targetUser.uid ?? targetUser.id}/block`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Blocked from discover' }),
+      });
+      toast.success('Profile blocked');
+      setCurrentIndex(prev => prev + 1);
+    } catch {
+      toast.error('Could not block profile');
     }
   };
 
@@ -99,6 +127,22 @@ export default function Explore() {
                     >
                         Connect
                     </Button>
+                </div>
+                <div className="flex justify-center gap-2 text-white/80">
+                    <button
+                        type="button"
+                        onClick={() => reportUser(currentUser)}
+                        className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition hover:bg-white/14"
+                    >
+                        <Flag className="size-3.5" /> Report
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => blockUser(currentUser)}
+                        className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition hover:bg-white/14"
+                    >
+                        <ShieldOff className="size-3.5" /> Block
+                    </button>
                 </div>
             </div>
           </Card>

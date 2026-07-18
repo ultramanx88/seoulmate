@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { Request, Response, Router } from 'express';
 import express from 'express';
 import { config } from './config.js';
@@ -23,8 +24,11 @@ import {
 } from './data/schema.js';
 
 const sessionCookieName = 'seoulmate_auth_session';
+const adminSessionCookieName = 'seoulmate_admin_session';
 const sessionTtlSeconds = 60 * 60 * 24 * 7;
+const adminSessionTtlSeconds = 60 * 60 * 12;
 const oauthStateTtlSeconds = 60 * 10;
+const scrypt = promisify(scryptCallback);
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -83,6 +87,53 @@ function providerConfigured(provider: AuthProvider): boolean {
   return Boolean(config.NAVER_CLIENT_ID && config.NAVER_CLIENT_SECRET);
 }
 
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('base64url');
+  const key = await scrypt(password, salt, 64) as Buffer;
+  return `scrypt$${salt}$${key.toString('base64url')}`;
+}
+
+async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
+  const [scheme, salt, expected] = passwordHash.split('$');
+  if (scheme !== 'scrypt' || !salt || !expected) return false;
+  const actual = await scrypt(password, salt, 64) as Buffer;
+  const expectedBuffer = Buffer.from(expected, 'base64url');
+  return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
+}
+
+async function ensureSuperadminSeeded(): Promise<void> {
+  const email = config.ADMIN_SUPER_EMAIL.trim().toLowerCase();
+  const password = config.ADMIN_SUPER_PASSWORD;
+  if (!email || !password) return;
+
+  const existing = await database.query<{ id: string; password_hash: string }>(
+    'SELECT id, password_hash FROM admin_users WHERE email = $1 LIMIT 1',
+    [email],
+  );
+  const passwordHash = await hashPassword(password);
+  if (!existing.rowCount) {
+    await database.query(
+      `
+        INSERT INTO admin_users (id, email, password_hash, role, display_name)
+        VALUES ($1, $2, $3, 'superadmin', $4)
+      `,
+      [randomUUID(), email, passwordHash, 'Superadmin'],
+    );
+    return;
+  }
+
+  const currentPasswordWorks = await verifyPassword(password, existing.rows[0].password_hash);
+  await database.query(
+    `
+      UPDATE admin_users
+      SET role = 'superadmin',
+          password_hash = CASE WHEN $3 THEN password_hash ELSE $2 END
+      WHERE id = $1
+    `,
+    [existing.rows[0].id, passwordHash, currentPasswordWorks],
+  );
+}
+
 async function getCurrentUser(request: Request): Promise<AppUserRow | null> {
   const token = parseCookies(request.headers.cookie)[sessionCookieName];
   if (!token) return null;
@@ -98,6 +149,10 @@ async function requireUser(request: Request, response: Response): Promise<AppUse
     response.status(401).json({ error: 'UNAUTHENTICATED' });
     return null;
   }
+  if (user.safety_status && user.safety_status !== 'active') {
+    response.status(403).json({ error: 'ACCOUNT_RESTRICTED', status: user.safety_status });
+    return null;
+  }
   return user;
 }
 
@@ -105,6 +160,78 @@ async function createSession(request: Request, response: Response, userId: strin
   const sessionId = randomUUID();
   await createAuthSession(request, sessionId, userId, sessionTtlSeconds);
   response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, sessionId, { maxAge: sessionTtlSeconds }));
+}
+
+type AdminRow = {
+  id: string;
+  email: string;
+  role: 'superadmin' | 'admin' | 'moderator';
+  display_name: string;
+};
+
+function adminJson(admin: AdminRow) {
+  return {
+    id: admin.id,
+    email: admin.email,
+    role: admin.role,
+    displayName: admin.display_name,
+  };
+}
+
+async function getCurrentAdmin(request: Request): Promise<AdminRow | null> {
+  const token = parseCookies(request.headers.cookie)[adminSessionCookieName];
+  if (!token) return null;
+  const result = await database.query<AdminRow>(
+    `
+      SELECT a.id, a.email, a.role, a.display_name
+      FROM admin_sessions s
+      JOIN admin_users a ON a.id = s.admin_id
+      WHERE s.id = $1
+        AND s.revoked_at IS NULL
+        AND s.expires_at > now()
+      LIMIT 1
+    `,
+    [token],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function requireAdmin(request: Request, response: Response): Promise<AdminRow | null> {
+  const admin = await getCurrentAdmin(request);
+  if (!admin) {
+    response.status(401).json({ error: 'ADMIN_UNAUTHENTICATED' });
+    return null;
+  }
+  return admin;
+}
+
+async function createAdminSession(request: Request, response: Response, adminId: string): Promise<void> {
+  const sessionId = randomUUID();
+  await database.query(
+    `
+      INSERT INTO admin_sessions (id, admin_id, user_agent, ip_address, expires_at)
+      VALUES ($1, $2, $3, NULLIF($4, '')::inet, now() + ($5::text || ' seconds')::interval)
+    `,
+    [sessionId, adminId, request.get('user-agent') ?? null, request.ip ?? '', adminSessionTtlSeconds],
+  );
+  response.setHeader(
+    'Set-Cookie',
+    serializeCookie(adminSessionCookieName, sessionId, { maxAge: adminSessionTtlSeconds }),
+  );
+}
+
+async function hasBlockBetween(userId: string, otherUserId: string): Promise<boolean> {
+  const result = await database.query(
+    `
+      SELECT 1
+      FROM user_blocks
+      WHERE (blocker_id = $1 AND blocked_user_id = $2)
+         OR (blocker_id = $2 AND blocked_user_id = $1)
+      LIMIT 1
+    `,
+    [userId, otherUserId],
+  );
+  return Boolean(result.rowCount);
 }
 
 async function exchangeGoogle(code: string): Promise<ProviderProfile> {
@@ -305,6 +432,7 @@ function topicJson(row: any, author: AppUserRow | null = null) {
     likesCount: row.likes_count ?? 0,
     commentsCount: row.comments_count ?? 0,
     createdAt: dateJson(row.created_at),
+    authorId: row.author_id ?? author?.id,
     authorName: row.author_name ?? author?.display_name,
     authorPhoto: row.author_photo ?? author?.photo_url,
     authorNationality: row.author_nationality ?? author?.nationality,
@@ -313,6 +441,200 @@ function topicJson(row: any, author: AppUserRow | null = null) {
 
 export function createApiRouter(): Router {
   const router = express.Router();
+
+  router.post('/v1/admin/auth/login', async (request, response) => {
+    await ensureSuperadminSeeded();
+    const body = request.body as { email?: string; password?: string };
+    const email = body.email?.trim().toLowerCase() ?? '';
+    const password = body.password ?? '';
+    if (!email || !password) {
+      response.status(400).json({ error: 'ADMIN_CREDENTIALS_REQUIRED' });
+      return;
+    }
+
+    const result = await database.query<AdminRow & { password_hash: string }>(
+      'SELECT id, email, password_hash, role, display_name FROM admin_users WHERE email = $1 LIMIT 1',
+      [email],
+    );
+    const admin = result.rows[0];
+    if (!admin || !(await verifyPassword(password, admin.password_hash))) {
+      response.status(401).json({ error: 'INVALID_ADMIN_CREDENTIALS' });
+      return;
+    }
+
+    await createAdminSession(request, response, admin.id);
+    await database.query('UPDATE admin_users SET last_login_at = now() WHERE id = $1', [admin.id]);
+    response.json({ admin: adminJson(admin) });
+  });
+
+  router.get('/v1/admin/auth/me', async (request, response) => {
+    await ensureSuperadminSeeded();
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    response.json({ admin: adminJson(admin) });
+  });
+
+  router.post('/v1/admin/auth/logout', async (request, response) => {
+    const token = parseCookies(request.headers.cookie)[adminSessionCookieName];
+    if (token) {
+      await database.query('UPDATE admin_sessions SET revoked_at = now() WHERE id = $1', [token]);
+    }
+    response.setHeader('Set-Cookie', serializeCookie(adminSessionCookieName, '', { maxAge: 1 }));
+    response.json({ ok: true });
+  });
+
+  router.get('/v1/admin/overview', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const [users, reports, content, messages] = await Promise.all([
+      database.query(`
+        SELECT
+          count(*)::int AS total,
+          count(*) FILTER (WHERE safety_status = 'active')::int AS active,
+          count(*) FILTER (WHERE safety_status = 'suspended')::int AS suspended,
+          count(*) FILTER (WHERE safety_status = 'banned')::int AS banned
+        FROM users
+      `),
+      database.query(`
+        SELECT
+          count(*) FILTER (WHERE status = 'open')::int AS open,
+          count(*) FILTER (WHERE status = 'reviewing')::int AS reviewing,
+          count(*) FILTER (WHERE status = 'resolved')::int AS resolved
+        FROM reports
+      `),
+      database.query(`
+        SELECT
+          (SELECT count(*)::int FROM topics WHERE moderation_status = 'visible') AS topics,
+          (SELECT count(*)::int FROM comments WHERE moderation_status = 'visible') AS comments
+      `),
+      database.query('SELECT count(*)::int AS messages FROM messages WHERE moderation_status = $1', ['visible']),
+    ]);
+    response.json({
+      users: users.rows[0],
+      reports: reports.rows[0],
+      content: { ...content.rows[0], messages: messages.rows[0]?.messages ?? 0 },
+    });
+  });
+
+  router.get('/v1/admin/reports', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const status = typeof request.query.status === 'string' ? request.query.status : null;
+    const result = await database.query(
+      `
+        SELECT
+          r.*,
+          reporter.display_name AS reporter_name,
+          reported.display_name AS reported_name
+        FROM reports r
+        LEFT JOIN users reporter ON reporter.id = r.reporter_id
+        LEFT JOIN users reported ON reported.id = r.reported_user_id
+        WHERE ($1::text IS NULL OR r.status = $1)
+        ORDER BY r.created_at DESC
+        LIMIT 100
+      `,
+      [status],
+    );
+    response.json({
+      reports: result.rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        priority: row.priority,
+        reason: row.reason,
+        detail: row.detail,
+        reporterId: row.reporter_id,
+        reporterName: row.reporter_name,
+        reportedUserId: row.reported_user_id,
+        reportedName: row.reported_name,
+        topicId: row.topic_id,
+        commentId: row.comment_id,
+        messageId: row.message_id,
+        resolution: row.resolution,
+        createdAt: dateJson(row.created_at),
+        resolvedAt: dateJson(row.resolved_at),
+      })),
+    });
+  });
+
+  router.patch('/v1/admin/reports/:reportId', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const body = request.body as { status?: string; resolution?: string };
+    const allowed = new Set(['open', 'reviewing', 'resolved', 'dismissed']);
+    if (!body.status || !allowed.has(body.status)) {
+      response.status(400).json({ error: 'INVALID_REPORT_STATUS' });
+      return;
+    }
+    const result = await database.query(
+      `
+        UPDATE reports
+        SET status = $2,
+            resolution = $3,
+            assigned_admin_id = $4,
+            resolved_at = CASE WHEN $2 IN ('resolved', 'dismissed') THEN now() ELSE resolved_at END
+        WHERE id = $1
+        RETURNING *
+      `,
+      [request.params.reportId, body.status, body.resolution ?? null, admin.id],
+    );
+    if (!result.rowCount) {
+      response.status(404).json({ error: 'REPORT_NOT_FOUND' });
+      return;
+    }
+    await database.query(
+      `
+        INSERT INTO moderation_actions (id, admin_id, report_id, target_type, target_id, action, reason)
+        VALUES ($1, $2, $3, 'report', $3, 'report_status_changed', $4)
+      `,
+      [randomUUID(), admin.id, request.params.reportId, body.resolution ?? body.status],
+    );
+    response.json({ report: result.rows[0] });
+  });
+
+  router.get('/v1/admin/users', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const result = await database.query<AppUserRow & { reports_count: number }>(
+      `
+        SELECT u.*, count(r.id)::int AS reports_count
+        FROM users u
+        LEFT JOIN reports r ON r.reported_user_id = u.id AND r.status IN ('open', 'reviewing')
+        GROUP BY u.id
+        ORDER BY reports_count DESC, u.created_at DESC
+        LIMIT 100
+      `,
+    );
+    response.json({
+      users: result.rows.map((row) => ({ ...toUserProfile(row), reportsCount: row.reports_count })),
+    });
+  });
+
+  router.patch('/v1/admin/users/:userId/status', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const body = request.body as { status?: string; reason?: string };
+    const allowed = new Set(['active', 'suspended', 'banned', 'deleted']);
+    if (!body.status || !allowed.has(body.status)) {
+      response.status(400).json({ error: 'INVALID_USER_STATUS' });
+      return;
+    }
+    const result = await database.query<AppUserRow>(
+      'UPDATE users SET safety_status = $2 WHERE id = $1 RETURNING *',
+      [request.params.userId, body.status],
+    );
+    if (!result.rowCount) {
+      response.status(404).json({ error: 'USER_NOT_FOUND' });
+      return;
+    }
+    await database.query(
+      `
+        INSERT INTO moderation_actions (id, admin_id, target_type, target_id, action, reason)
+        VALUES ($1, $2, 'user', $3, $4, $5)
+      `,
+      [randomUUID(), admin.id, request.params.userId, `user_${body.status}`, body.reason ?? null],
+    );
+    response.json({ user: toUserProfile(result.rows[0]) });
+  });
 
   router.get('/v1/auth/:provider/start', async (request, response) => {
     const { provider } = request.params;
@@ -395,6 +717,78 @@ export function createApiRouter(): Router {
     response.json({ profile: toUserProfile(updated) });
   });
 
+  router.post('/v1/reports', async (request, response) => {
+    const user = await requireUser(request, response);
+    if (!user) return;
+    const body = request.body as {
+      targetType?: 'user' | 'topic' | 'comment' | 'message';
+      targetId?: string;
+      reason?: string;
+      detail?: string;
+      reportedUserId?: string;
+    };
+    if (!body.targetType || !body.targetId || !body.reason?.trim()) {
+      response.status(400).json({ error: 'REPORT_TARGET_AND_REASON_REQUIRED' });
+      return;
+    }
+    const id = randomUUID();
+    await database.query(
+      `
+        INSERT INTO reports (
+          id, reporter_id, reported_user_id, topic_id, comment_id, message_id, reason, detail
+        )
+        VALUES (
+          $1, $2,
+          CASE WHEN $3 = 'user' THEN $4 ELSE $7 END,
+          CASE WHEN $3 = 'topic' THEN $4 ELSE NULL END,
+          CASE WHEN $3 = 'comment' THEN $4 ELSE NULL END,
+          CASE WHEN $3 = 'message' THEN $4 ELSE NULL END,
+          $5, $6
+        )
+      `,
+      [
+        id,
+        user.id,
+        body.targetType,
+        body.targetId,
+        body.reason.trim(),
+        body.detail?.trim() || null,
+        body.reportedUserId ?? null,
+      ],
+    );
+    response.status(201).json({ report: { id, status: 'open' } });
+  });
+
+  router.post('/v1/users/:userId/block', async (request, response) => {
+    const user = await requireUser(request, response);
+    if (!user) return;
+    if (request.params.userId === user.id) {
+      response.status(400).json({ error: 'CANNOT_BLOCK_SELF' });
+      return;
+    }
+    const body = request.body as { reason?: string };
+    await database.query(
+      `
+        INSERT INTO user_blocks (blocker_id, blocked_user_id, reason)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (blocker_id, blocked_user_id)
+        DO UPDATE SET reason = EXCLUDED.reason
+      `,
+      [user.id, request.params.userId, body.reason ?? null],
+    );
+    response.json({ ok: true });
+  });
+
+  router.delete('/v1/users/:userId/block', async (request, response) => {
+    const user = await requireUser(request, response);
+    if (!user) return;
+    await database.query(
+      'DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_user_id = $2',
+      [user.id, request.params.userId],
+    );
+    response.json({ ok: true });
+  });
+
   router.get('/v1/topics', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
@@ -408,11 +802,14 @@ export function createApiRouter(): Router {
           t.likes_count,
           t.comments_count,
           t.created_at,
+          t.author_id,
           u.display_name AS author_name,
           u.photo_url AS author_photo,
           u.nationality AS author_nationality
         FROM topics t
         JOIN users u ON u.id = t.author_id
+        WHERE t.moderation_status = 'visible'
+          AND u.safety_status = 'active'
         ORDER BY t.created_at DESC
         LIMIT 50
       `,
@@ -482,6 +879,8 @@ export function createApiRouter(): Router {
         FROM comments c
         JOIN users u ON u.id = c.author_id
         WHERE c.topic_id = $1
+          AND c.moderation_status = 'visible'
+          AND u.safety_status = 'active'
         ORDER BY c.created_at ASC
       `,
       [request.params.topicId],
@@ -545,7 +944,13 @@ export function createApiRouter(): Router {
         FROM users
         WHERE id <> $1
           AND ($2::text IS NULL OR nationality = $2)
+          AND safety_status = 'active'
           AND is_profile_complete = true
+          AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id = $1 AND b.blocked_user_id = users.id)
+               OR (b.blocker_id = users.id AND b.blocked_user_id = $1)
+          )
         ORDER BY last_active_at DESC NULLS LAST, created_at DESC
         LIMIT 20
       `,
@@ -564,7 +969,13 @@ export function createApiRouter(): Router {
         FROM users
         WHERE id <> $1
           AND ($2::text IS NULL OR nationality = $2)
+          AND safety_status = 'active'
           AND is_profile_complete = true
+          AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id = $1 AND b.blocked_user_id = users.id)
+               OR (b.blocker_id = users.id AND b.blocked_user_id = $1)
+          )
         ORDER BY last_active_at DESC NULLS LAST, created_at DESC
         LIMIT 5
       `,
@@ -593,6 +1004,12 @@ export function createApiRouter(): Router {
         JOIN chat_participants other_participant
           ON other_participant.chat_id = c.id AND other_participant.user_id <> $1
         JOIN users other_user ON other_user.id = other_participant.user_id
+        WHERE other_user.safety_status = 'active'
+          AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id = $1 AND b.blocked_user_id = other_user.id)
+               OR (b.blocker_id = other_user.id AND b.blocked_user_id = $1)
+          )
         ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC
       `,
       [user.id],
@@ -622,6 +1039,18 @@ export function createApiRouter(): Router {
     const targetUserId = body.targetUserId ?? body.userId;
     if (!targetUserId) {
       response.status(400).json({ error: 'TARGET_USER_REQUIRED' });
+      return;
+    }
+    const target = await database.query<AppUserRow>(
+      'SELECT * FROM users WHERE id = $1 AND safety_status = $2 LIMIT 1',
+      [targetUserId, 'active'],
+    );
+    if (!target.rowCount) {
+      response.status(404).json({ error: 'TARGET_USER_NOT_FOUND' });
+      return;
+    }
+    if (await hasBlockBetween(user.id, targetUserId)) {
+      response.status(403).json({ error: 'USER_BLOCKED' });
       return;
     }
     const participants = [user.id, targetUserId].sort();
@@ -669,11 +1098,20 @@ export function createApiRouter(): Router {
       response.status(404).json({ error: 'CHAT_NOT_FOUND' });
       return;
     }
+    const otherParticipant = await database.query<{ user_id: string }>(
+      'SELECT user_id FROM chat_participants WHERE chat_id = $1 AND user_id <> $2 LIMIT 1',
+      [request.params.chatId, user.id],
+    );
+    if (otherParticipant.rows[0] && await hasBlockBetween(user.id, otherParticipant.rows[0].user_id)) {
+      response.status(403).json({ error: 'USER_BLOCKED' });
+      return;
+    }
     const result = await database.query(
       `
         SELECT id, sender_id, text, translations, created_at
         FROM messages
         WHERE chat_id = $1
+          AND moderation_status = 'visible'
         ORDER BY created_at ASC
       `,
       [request.params.chatId],
@@ -703,6 +1141,14 @@ export function createApiRouter(): Router {
     );
     if (!access.rowCount) {
       response.status(404).json({ error: 'CHAT_NOT_FOUND' });
+      return;
+    }
+    const otherParticipant = await database.query<{ user_id: string }>(
+      'SELECT user_id FROM chat_participants WHERE chat_id = $1 AND user_id <> $2 LIMIT 1',
+      [request.params.chatId, user.id],
+    );
+    if (otherParticipant.rows[0] && await hasBlockBetween(user.id, otherParticipant.rows[0].user_id)) {
+      response.status(403).json({ error: 'USER_BLOCKED' });
       return;
     }
     const id = randomUUID();

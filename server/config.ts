@@ -36,6 +36,8 @@ const envSchema = z.object({
   NAVER_CLIENT_ID: z.string().default(''),
   NAVER_CLIENT_SECRET: z.string().default(''),
   NAVER_REDIRECT_URI: z.string().default(''),
+  ADMIN_SUPER_EMAIL: z.string().email().optional().or(z.literal('')).default(''),
+  ADMIN_SUPER_PASSWORD: z.string().min(12).optional().or(z.literal('')).default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

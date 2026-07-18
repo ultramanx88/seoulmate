@@ -5,6 +5,7 @@ import ProfileSetup from './components/ProfileSetup';
 import Feed from './components/Feed';
 import Explore from './components/Explore';
 import ChatList from './components/ChatList';
+import AdminPanel from './components/AdminPanel';
 import { Heart, MessageCircle, Globe, Settings as SettingsIcon } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 
@@ -83,6 +84,10 @@ function MainApp() {
 }
 
 export default function App() {
+  if (window.location.pathname === '/admin') {
+    return <AdminPanel />;
+  }
+
   return (
     <AuthProvider>
       <MainApp />

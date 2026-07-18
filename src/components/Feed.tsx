@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent } from './ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Heart, MessageSquare, Send, Globe, Sparkles, Wand2, UserCheck, Star, Share2 } from 'lucide-react';
+import { Flag, Heart, MessageSquare, Send, Globe, Sparkles, Wand2, UserCheck, Star, Share2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { geminiService } from '../services/gemini';
@@ -116,6 +116,25 @@ export default function Feed() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to like moment");
+    }
+  };
+
+  const reportPost = async (post: any) => {
+    const reason = window.prompt('What should safety review?');
+    if (!reason?.trim()) return;
+    try {
+      await apiRequest('/v1/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          targetType: 'topic',
+          targetId: post.id,
+          reportedUserId: post.authorId,
+          reason,
+        }),
+      });
+      toast.success('Report sent to safety review');
+    } catch {
+      toast.error('Could not submit report');
     }
   };
 
@@ -386,6 +405,15 @@ export default function Feed() {
                         <MessageSquare className="w-4 h-4" />
                     </div>
                     <span className="text-xs font-bold">{post.commentsCount || 0}</span>
+                </button>
+                <button 
+                    onClick={() => reportPost(post)}
+                    className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-coral group/btn"
+                >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-blush">
+                        <Flag className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold">Report</span>
                 </button>
                 <button 
                   onClick={() => showMatchRecommendations(post)}
