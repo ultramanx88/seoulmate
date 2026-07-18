@@ -107,12 +107,12 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  --radius: 0.75rem;
+  --radius: 0.625rem;
   --space-screen-x: clamp(1rem, 4vw, 1.5rem);
   --shell-max-width: 28rem;
   --bottom-nav-height: 5rem;
-  --shadow-soft: 0 18px 48px oklch(0.68 0.19 23 / 12%);
-  --shadow-raised: 0 24px 70px oklch(0.25 0.07 282 / 16%);
+  --shadow-soft: 0 14px 36px oklch(0.25 0.07 282 / 8%);
+  --shadow-raised: 0 24px 64px oklch(0.25 0.07 282 / 14%);
 }
 
 .dark {
@@ -167,7 +167,24 @@
     @apply bg-background text-foreground;
     min-width: 320px;
     min-height: 100vh;
-    font-feature-settings: "kern";
+    font-feature-settings: "kern", "liga";
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
   }
 
   ::selection {
@@ -180,8 +197,7 @@
   .app-shell {
     min-height: 100vh;
     background:
-      radial-gradient(circle at top right, oklch(0.94 0.04 286 / 70%), transparent 28rem),
-      linear-gradient(180deg, var(--background), oklch(0.97 0.018 73));
+      linear-gradient(180deg, oklch(0.995 0.006 73), var(--background) 46%, oklch(0.972 0.014 286));
     padding-bottom: var(--bottom-nav-height);
   }
 
@@ -192,44 +208,52 @@
 
   .top-bar,
   .bottom-bar {
-    background: oklch(1 0 0 / 88%);
+    background: oklch(1 0 0 / 92%);
     border-color: var(--border);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
-  .brand-mark,
+  .brand-mark {
+    background: var(--brand-ink);
+    box-shadow: inset 0 0 0 1px oklch(1 0 0 / 16%);
+  }
+
   .brand-gradient,
   .vibrant-gradient {
-    background: linear-gradient(135deg, var(--brand-coral), var(--brand-ink));
+    background: var(--brand-coral);
   }
 
   .brand-wordmark {
-    color: var(--brand-coral);
+    color: var(--brand-ink);
     font-family: var(--font-display);
-    font-weight: 900;
+    font-weight: 800;
+    letter-spacing: 0;
   }
 
   .brand-wordmark-accent {
-    color: var(--brand-ink);
+    color: var(--brand-coral);
   }
 
   .surface-card,
   .vibrant-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius-3xl);
+    border-radius: var(--radius-2xl);
     box-shadow: var(--shadow-soft);
   }
 
   .action-primary {
     background: var(--primary);
     color: var(--primary-foreground);
-    box-shadow: 0 14px 34px oklch(0.68 0.19 23 / 24%);
+    box-shadow: 0 12px 28px oklch(0.68 0.19 23 / 18%);
+    transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
   }
 
   .action-primary:hover {
     background: oklch(0.62 0.2 23);
+    box-shadow: 0 14px 34px oklch(0.68 0.19 23 / 22%);
+    transform: translateY(-1px);
   }
 
   .locale-chip,
@@ -245,11 +269,11 @@
     border: 1px solid color-mix(in oklch, var(--primary), white 64%);
     background: color-mix(in oklch, var(--primary), white 88%);
     color: color-mix(in oklch, var(--primary), black 18%);
-    font-size: 0.625rem;
-    font-weight: 900;
+    font-size: 0.68rem;
+    font-weight: 750;
     line-height: 1;
     letter-spacing: 0;
-    text-transform: uppercase;
+    text-transform: none;
     white-space: nowrap;
   }
 
@@ -268,7 +292,7 @@
   .landing-shell {
     color: var(--foreground);
     background:
-      linear-gradient(135deg, oklch(1 0 0) 0%, var(--background) 54%, oklch(0.965 0.018 286) 100%);
+      linear-gradient(135deg, oklch(1 0 0) 0%, var(--background) 58%, oklch(0.972 0.018 286) 100%);
   }
 
   .landing-grid {
@@ -280,7 +304,7 @@
       linear-gradient(90deg, color-mix(in oklch, var(--brand-ink), transparent 94%) 1px, transparent 1px);
     background-size: 2.75rem 2.75rem;
     mask-image: linear-gradient(180deg, black, transparent 78%);
-    opacity: 0.42;
+    opacity: 0.28;
   }
 
   .landing-mark {
@@ -293,7 +317,7 @@
     border-radius: 1rem;
     background: var(--brand-ink);
     color: white;
-    box-shadow: 0 16px 36px oklch(0.25 0.07 282 / 18%);
+    box-shadow: 0 14px 30px oklch(0.25 0.07 282 / 14%);
   }
 
   .landing-status,
@@ -314,7 +338,7 @@
     border-radius: 999px;
     padding: 0.45rem 0.75rem;
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 750;
     line-height: 1;
     white-space: nowrap;
   }
@@ -332,7 +356,7 @@
     border-radius: 999px;
     padding: 0.4rem 0.55rem;
     font-size: 0.78rem;
-    font-weight: 900;
+    font-weight: 750;
   }
 
   .landing-kicker span {
@@ -350,11 +374,11 @@
   }
 
   .landing-headline {
-    max-width: 11ch;
+    max-width: 13.5ch;
     color: var(--brand-ink);
-    font-size: clamp(3.25rem, 8vw, 6rem);
-    font-weight: 900;
-    line-height: 0.94;
+    font-size: clamp(2.9rem, 6.2vw, 5.05rem);
+    font-weight: 800;
+    line-height: 1.04;
     letter-spacing: 0;
     text-wrap: balance;
   }
@@ -370,7 +394,7 @@
     padding: 0.75rem 0.9rem;
     color: var(--brand-ink);
     font-size: 0.9rem;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .landing-signal {
@@ -380,14 +404,14 @@
     border: 1px solid color-mix(in oklch, var(--brand-ink), white 84%);
     border-radius: var(--radius-2xl);
     background: oklch(1 0 0 / 72%);
-    padding: 0.9rem;
-    box-shadow: 0 16px 40px oklch(0.25 0.07 282 / 7%);
+    padding: 1rem;
+    box-shadow: 0 12px 28px oklch(0.25 0.07 282 / 6%);
   }
 
   .landing-preview {
     position: relative;
     border: 1px solid color-mix(in oklch, var(--brand-ink), white 76%);
-    border-radius: 2rem;
+    border-radius: 1.35rem;
     background:
       linear-gradient(180deg, oklch(1 0 0), oklch(0.985 0.012 73)),
       var(--card);
@@ -400,7 +424,7 @@
     position: absolute;
     inset: 0.75rem;
     z-index: -1;
-    border-radius: 2rem;
+    border-radius: 1.35rem;
     border: 1px solid color-mix(in oklch, var(--brand-coral), white 76%);
     transform: rotate(-2.5deg);
   }
@@ -415,7 +439,7 @@
   }
 
   .landing-message {
-    border-radius: 1.45rem;
+    border-radius: 1rem;
     padding: 1rem;
   }
 
@@ -434,7 +458,7 @@
     border-radius: 0.95rem;
     background: var(--brand-ink);
     color: white;
-    font-weight: 900;
+    font-weight: 800;
   }
 
   .landing-match-score {
@@ -443,7 +467,7 @@
     color: var(--accent-foreground);
     padding: 0.35rem 0.55rem;
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 750;
   }
 
   .landing-intents {
@@ -464,7 +488,7 @@
     padding: 0.55rem 0.65rem;
     color: var(--muted-foreground);
     font-size: 0.82rem;
-    font-weight: 800;
+    font-weight: 700;
   }
 
   .landing-intent-chip {
@@ -474,7 +498,7 @@
     border-radius: 999px;
     padding: 0.35rem 0.7rem;
     font-size: 0.74rem;
-    font-weight: 900;
+    font-weight: 750;
   }
 
   .landing-chip-coral {
@@ -499,7 +523,7 @@
     border-radius: 1rem;
     padding: 0.65rem 0.85rem;
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 750;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -516,8 +540,8 @@
 
 @media (max-width: 640px) {
   .landing-headline {
-    max-width: 10.5ch;
-    font-size: clamp(3rem, 18vw, 4.6rem);
+    max-width: 11.5ch;
+    font-size: clamp(2.7rem, 15vw, 4.25rem);
   }
 
   .landing-signal {

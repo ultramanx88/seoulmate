@@ -35,38 +35,41 @@ export default function ChatList() {
 
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-3xl font-black tracking-tighter mb-8 italic px-2 uppercase text-gray-800">Your Connections</h2>
+      <div className="px-2 pb-3">
+        <h2 className="text-3xl font-extrabold leading-tight text-brand-ink">Connections</h2>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">Recent conversations and new starts.</p>
+      </div>
       {chats.length === 0 && (
-        <div className="py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
-          No vibrant souls yet. Start exploring!
+        <div className="rounded-2xl border border-border bg-white px-6 py-16 text-center text-sm font-semibold text-muted-foreground shadow-sm">
+          No conversations yet. Start exploring when you are ready.
         </div>
       )}
       {chats.map((chat) => (
         <button 
           key={chat.id}
           onClick={() => setSelectedChatId(chat.id)}
-          className="w-full flex items-center gap-4 p-5 rounded-[2rem] bg-white border border-rose-50 shadow-xl shadow-rose-100/50 hover:shadow-2xl hover:shadow-rose-100 transition-all text-left group"
+          className="group flex w-full items-center gap-4 rounded-2xl border border-border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-coral/25 hover:shadow-md"
         >
           <div className="relative">
-            <Avatar className="w-16 h-16 border-2 border-white shadow-md transition-transform group-hover:scale-105">
+            <Avatar className="h-14 w-14 border-2 border-white shadow-sm transition-transform group-hover:scale-[1.03]">
                 <AvatarImage src={chat.otherUser?.photoURL} />
                 <AvatarFallback>{chat.otherUser?.displayName?.[0]}</AvatarFallback>
             </Avatar>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-green-400 border-4 border-white shadow-sm" />
+            <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-white bg-brand-mint shadow-sm" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start mb-1">
-              <span className="font-black text-gray-900 flex items-center gap-2 italic">
+              <span className="flex items-center gap-2 font-extrabold text-foreground">
                 {chat.otherUser?.displayName}
                 <span className="vibrant-tag-rose">
                     {chat.otherUser?.nationality}
                 </span>
               </span>
-              <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">
+              <span className="text-xs font-semibold text-muted-foreground">
                 {parseApiDate(chat.lastMessageAt) ? formatDistanceToNow(parseApiDate(chat.lastMessageAt)!, { addSuffix: false }) : ''}
               </span>
             </div>
-            <p className="text-sm text-gray-500 truncate font-bold opacity-80">{chat.lastMessage}</p>
+            <p className="truncate text-sm font-medium text-muted-foreground">{chat.lastMessage}</p>
           </div>
         </button>
       ))}

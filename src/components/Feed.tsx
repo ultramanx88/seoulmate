@@ -191,7 +191,7 @@ export default function Feed() {
       setComments(result.comments);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to load whispers");
+      toast.error("Failed to load comments");
     }
 
     // AI Suggestions
@@ -223,25 +223,25 @@ export default function Feed() {
           )
         );
         setNewComment('');
-        toast.success("Comment whispered!");
+        toast.success("Comment posted");
     } catch (e) {
-        toast.error("Failed to whisper");
+        toast.error("Failed to post comment");
     }
   };
 
   return (
     <div className="p-4 space-y-6">
-      <div className="bg-white rounded-[2.5rem] p-6 shadow-xl shadow-rose-100 border border-rose-50">
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex gap-4 mb-4">
-            <Avatar className="w-12 h-12 border-2 border-rose-100 shadow-sm">
+            <Avatar className="w-12 h-12 border-2 border-white shadow-sm">
                 <AvatarImage src={profile?.photoURL} />
                 <AvatarFallback>{profile?.displayName?.[0]}</AvatarFallback>
             </Avatar>
             <Textarea 
                 value={newPost}
                 onChange={(e) => setNewPost(e.target.value)}
-                placeholder="What's happening in your soul?"
-                className="border-none bg-transparent focus-visible:ring-0 resize-none min-h-[80px] font-bold text-lg p-0 placeholder:text-gray-300"
+                placeholder="Share a moment, question, or plan..."
+                className="min-h-[80px] resize-none border-none bg-transparent p-0 text-base font-medium leading-7 placeholder:text-muted-foreground/55 focus-visible:ring-0"
             />
         </div>
         <div className="flex justify-end gap-2">
@@ -249,14 +249,14 @@ export default function Feed() {
                 onClick={handleEnhance}
                 disabled={isEnhancing || !newPost.trim()}
                 variant="outline"
-                className="rounded-full border-rose-200 text-rose-500 hover:bg-rose-50 font-bold px-6 h-12"
+                className="h-11 rounded-xl border-border px-4 font-semibold text-brand-ink hover:bg-muted"
             >
                 {isEnhancing ? "Refining..." : <><Wand2 className="w-4 h-4 mr-2" /> AI Polish</>}
             </Button>
             <Button 
                 onClick={() => handlePost()} 
                 disabled={submitting || !newPost.trim()}
-                className="vibrant-gradient text-white font-black hover:opacity-90 rounded-full py-4 px-8 shadow-lg shadow-rose-200 transition-all hover:-translate-y-0.5 active:translate-y-0 h-12"
+                className="action-primary h-11 rounded-xl px-5 font-extrabold"
             >
                 <Send className="w-5 h-5 mr-3" /> Share Moment
             </Button>
@@ -264,24 +264,24 @@ export default function Feed() {
       </div>
 
       <Dialog open={!!enhancedTopic} onOpenChange={() => setEnhancedTopic(null)}>
-        <DialogContent className="rounded-[2.5rem] border-rose-50 max-w-sm mx-auto">
+        <DialogContent className="mx-auto max-w-sm rounded-2xl border-border">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black italic tracking-tighter text-gray-800 flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-2xl font-extrabold text-brand-ink">
                 <Sparkles className="w-6 h-6 text-amber-500" /> AI Refined Moment
             </DialogTitle>
           </DialogHeader>
           {enhancedTopic && (
               <div className="space-y-4 py-4">
-                <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100 shadow-sm">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-2">Engaging Title</div>
-                    <div className="text-lg font-black text-rose-600 italic leading-tight">{enhancedTopic.title}</div>
+                <div className="rounded-2xl border border-brand-coral/15 bg-brand-blush p-5 shadow-sm">
+                    <div className="mb-2 text-xs font-bold text-brand-coral">Suggested title</div>
+                    <div className="text-lg font-extrabold leading-tight text-brand-ink">{enhancedTopic.title}</div>
                 </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-gray-300 mb-2">Inviting Description</div>
+                <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                    <div className="mb-2 text-xs font-bold text-muted-foreground">Suggested description</div>
                     <div className="text-gray-700 font-medium leading-relaxed">{enhancedTopic.description}</div>
                 </div>
                 <div className="flex justify-center">
-                    <span className="vibrant-tag-rose text-[10px] font-black uppercase tracking-widest px-4 py-2">
+                    <span className="vibrant-tag-rose px-4 py-2">
                         Intent: {enhancedTopic.intent}
                     </span>
                 </div>
@@ -290,14 +290,14 @@ export default function Feed() {
           <DialogFooter className="flex-col gap-2">
             <Button 
                 onClick={() => handlePost(enhancedTopic!)}
-                className="vibrant-gradient text-white font-black h-14 rounded-2xl shadow-xl shadow-rose-200 w-full"
+                className="action-primary h-12 w-full rounded-xl font-extrabold"
             >
                 Accept & Post
             </Button>
             <Button 
                 variant="ghost" 
                 onClick={() => setEnhancedTopic(null)}
-                className="text-gray-400 font-bold uppercase tracking-widest text-[10px] h-10"
+                className="h-10 font-semibold text-muted-foreground"
             >
                 Edit Manually
             </Button>
@@ -307,7 +307,7 @@ export default function Feed() {
 
       <div className="space-y-6">
         {posts.map((post) => (
-          <Card key={post.id} className="rounded-[2.5rem] border-rose-50 shadow-xl shadow-rose-100/50 overflow-hidden bg-white group transition-all hover:shadow-2xl hover:shadow-rose-100 animate-in fade-in slide-in-from-bottom-4">
+          <Card key={post.id} className="group overflow-hidden rounded-2xl border-border bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-4">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -316,17 +316,17 @@ export default function Feed() {
                         <AvatarFallback>{post.authorName?.[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                        <div className="font-black text-gray-900 flex items-center gap-2 italic">
+                        <div className="flex items-center gap-2 font-extrabold text-foreground">
                             {post.authorName}
                             <span className="vibrant-tag-indigo">
                                 {post.authorNationality === 'TH' ? '🇹🇭 TH' : '🇰🇷 KR'}
                             </span>
                         </div>
-                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">
+                        <div className="text-xs font-semibold text-muted-foreground">
                             {parseApiDate(post.createdAt) ? formatDistanceToNow(parseApiDate(post.createdAt)!) + ' ago' : 'Just now'}
 
                             {post.intent && (
-                                <span className="ml-2 text-indigo-400">· {post.intent}</span>
+                                <span className="ml-2 text-brand-ink/60">· {post.intent}</span>
                             )}
                         </div>
                     </div>
@@ -334,7 +334,7 @@ export default function Feed() {
               </div>
 
               {post.title && (
-                  <h3 className="text-xl font-black italic tracking-tighter text-rose-600 mb-3 leading-tight">
+                  <h3 className="mb-3 text-xl font-extrabold leading-tight text-brand-ink">
                     {post.title}
                   </h3>
               )}
@@ -344,57 +344,57 @@ export default function Feed() {
               </p>
 
               {translations[post.id] && (
-                <div className="mb-6 p-5 rounded-[2rem] bg-indigo-50/30 border border-indigo-100/50 animate-in fade-in slide-in-from-top-2">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-2 flex items-center gap-1.5">
+                <div className="mb-6 rounded-2xl border border-brand-ink/10 bg-brand-lilac/45 p-5 animate-in fade-in slide-in-from-top-2">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-brand-ink/60">
                         <Globe className="w-3 h-3" /> AI Insight ({translations[post.id].lang})
                     </div>
-                    <p className="text-indigo-900 leading-relaxed font-medium italic">
+                    <p className="font-medium leading-relaxed text-brand-ink">
                         {translations[post.id].text}
                     </p>
                 </div>
               )}
 
-              <div className="flex items-center gap-6 pt-6 border-t border-rose-50">
+              <div className="flex items-center gap-5 border-t border-border pt-5">
                 <button 
                     onClick={() => handleLike(post.id)}
-                    className="flex items-center gap-2 text-gray-400 hover:text-rose-500 transition-all group/btn"
+                    className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-coral group/btn"
                 >
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-colors group-hover/btn:bg-rose-50">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-blush">
                         <Heart className="w-4 h-4 group-active/btn:scale-150 transition-transform fill-transparent group-hover/btn:fill-rose-500" />
                     </div>
-                    <span className="text-xs font-black tracking-tight">{post.likesCount || 0}</span>
+                    <span className="text-xs font-bold">{post.likesCount || 0}</span>
                 </button>
                 <button 
                     onClick={() => handleTranslate(post.id, post.content)}
                     disabled={isTranslating === post.id}
-                    className="flex items-center gap-2 text-gray-400 hover:text-indigo-500 transition-all group/btn"
+                    className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-ink group/btn"
                 >
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-colors group-hover/btn:bg-indigo-50">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-lilac">
                         {isTranslating === post.id ? (
                             <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                         ) : (
                             <Globe className="w-4 h-4" />
                         )}
                     </div>
-                    <span className="text-xs font-black tracking-tight">Translate</span>
+                    <span className="text-xs font-bold">Translate</span>
                 </button>
                 <button 
                     onClick={() => openComments(post)}
-                    className="flex items-center gap-2 text-gray-400 hover:text-indigo-500 transition-all group/btn"
+                    className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-ink group/btn"
                 >
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center transition-colors group-hover/btn:bg-indigo-50">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-lilac">
                         <MessageSquare className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-black tracking-tight">{post.commentsCount || 0}</span>
+                    <span className="text-xs font-bold">{post.commentsCount || 0}</span>
                 </button>
                 <button 
                   onClick={() => showMatchRecommendations(post)}
-                  className="flex items-center gap-2 text-rose-500 hover:text-rose-600 transition-all group/btn ml-auto"
+                  className="ml-auto flex items-center gap-2 text-brand-coral transition-all hover:text-brand-ink group/btn"
                 >
-                  <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center transition-colors group-hover/btn:bg-rose-100 italic font-black text-[10px]">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-blush text-[10px] font-extrabold transition-colors group-hover/btn:bg-brand-lilac">
                       AI
                   </div>
-                  <span className="text-xs font-black tracking-tight uppercase">Soul Match</span>
+                  <span className="text-xs font-bold">Match hint</span>
                 </button>
               </div>
             </CardContent>
@@ -403,52 +403,52 @@ export default function Feed() {
       </div>
 
       <Dialog open={!!selectedPostForMatch} onOpenChange={() => setSelectedPostForMatch(null)}>
-        <DialogContent className="rounded-[2.5rem] border-rose-50 max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+        <DialogContent className="mx-auto max-h-[80vh] max-w-sm overflow-y-auto rounded-2xl border-border">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black italic tracking-tighter text-gray-800 flex items-center gap-2">
-                <Star className="w-6 h-6 text-rose-500" /> AI Soul Matching
+            <DialogTitle className="flex items-center gap-2 text-2xl font-extrabold text-brand-ink">
+                <Star className="w-6 h-6 text-brand-coral" /> Match suggestions
             </DialogTitle>
-            <DialogDescription className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-loose">
-                Identifying souls most likely to resonate with this moment.
+            <DialogDescription className="text-sm font-medium leading-6 text-muted-foreground">
+                People who may respond well to this moment.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             {isMatching ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-4 text-rose-500">
-                    <div className="w-12 h-12 border-4 border-rose-100 border-t-rose-500 rounded-full animate-spin" />
-                    <span className="text-[10px] font-black uppercase tracking-widest animate-pulse">Calculating Compatibility...</span>
+                <div className="flex flex-col items-center justify-center gap-4 py-12 text-brand-coral">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-blush border-t-brand-coral" />
+                    <span className="animate-pulse text-xs font-bold">Calculating compatibility...</span>
                 </div>
             ) : (
                 <div className="space-y-4">
                     {matchingResults.map((res, i) => (
-                        <div key={i} className="bg-white p-5 rounded-[2rem] border border-rose-50 shadow-lg shadow-rose-100/30 flex flex-col gap-3 transition-transform hover:scale-[1.02]">
+                        <div key={i} className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-5 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md">
                             <div className="flex items-center gap-3">
-                                <Avatar className="w-12 h-12 border-2 border-indigo-50 shadow-sm">
+                                <Avatar className="w-12 h-12 border-2 border-white shadow-sm">
                                     <AvatarImage src={res.user.photoURL} />
                                     <AvatarFallback>{res.user.displayName?.[0]}</AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1">
                                     <div className="flex justify-between items-center">
-                                        <span className="font-black italic text-gray-800">{res.user.displayName}</span>
+                                        <span className="font-extrabold text-foreground">{res.user.displayName}</span>
                                         <div className="flex items-center gap-1">
-                                            <span className="text-lg font-black text-rose-500">{res.score}</span>
-                                            <span className="text-[8px] font-black text-rose-300 uppercase">Match</span>
+                                            <span className="text-lg font-extrabold text-brand-coral">{res.score}</span>
+                                            <span className="text-xs font-semibold text-muted-foreground">match</span>
                                         </div>
                                     </div>
-                                    <div className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">
-                                        {res.user.intent} · {res.user.nationality === 'TH' ? 'THAILAND' : 'KOREA'}
+                                    <div className="text-xs font-semibold text-brand-ink/60">
+                                        {res.user.intent} · {res.user.nationality === 'TH' ? 'Thailand' : 'Korea'}
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-rose-50/50 p-4 rounded-2xl text-[11px] font-medium text-gray-600 italic leading-relaxed border border-rose-100/50">
-                                "{res.reason}"
+                            <div className="rounded-2xl border border-brand-coral/10 bg-brand-blush/50 p-4 text-sm font-medium leading-relaxed text-foreground">
+                                {res.reason}
                             </div>
                             <Button 
                               onClick={() => handleInvite(res.user, selectedPostForMatch)}
                               disabled={invitingUserId === res.user.id}
                               variant="ghost" 
-                              className="w-full rounded-xl border border-rose-100 text-rose-500 font-black uppercase text-[10px] tracking-widest h-12 shadow-sm hover:bg-rose-50"
+                              className="h-11 w-full rounded-xl border border-border text-sm font-extrabold text-brand-coral shadow-sm hover:bg-brand-blush"
                             >
                                 {invitingUserId === res.user.id ? (
                                   <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
@@ -459,8 +459,8 @@ export default function Feed() {
                         </div>
                     ))}
                     {matchingResults.length === 0 && (
-                        <div className="py-8 text-center text-gray-400 font-bold uppercase tracking-widest text-[10px]">
-                            No matches found in this vicinity.
+                        <div className="py-8 text-center text-sm font-semibold text-muted-foreground">
+                            No strong suggestions yet.
                         </div>
                     )}
                 </div>
@@ -470,9 +470,9 @@ export default function Feed() {
       </Dialog>
 
       <Dialog open={!!selectedPostForComments} onOpenChange={() => setSelectedPostForComments(null)}>
-        <DialogContent className="rounded-[2.5rem] border-rose-50 max-w-sm mx-auto flex flex-col h-[80vh] p-0 overflow-hidden bg-rose-50/10 backdrop-blur-xl">
-          <DialogHeader className="p-6 bg-white/80 border-b border-rose-100">
-            <DialogTitle className="text-xl font-black italic tracking-tighter text-gray-800">Soul Whispers</DialogTitle>
+        <DialogContent className="mx-auto flex h-[80vh] max-w-sm flex-col overflow-hidden rounded-2xl border-border bg-white p-0">
+          <DialogHeader className="border-b border-border bg-white p-6">
+            <DialogTitle className="text-xl font-extrabold text-brand-ink">Comments</DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -483,19 +483,19 @@ export default function Feed() {
                         <AvatarFallback>{comment.authorName?.[0]}</AvatarFallback>
                     </Avatar>
                     <div className="space-y-1">
-                        <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{comment.authorName}</div>
-                        <div className="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm text-sm font-medium text-gray-700 leading-relaxed border border-rose-50">
+                        <div className="text-xs font-bold text-brand-ink/60">{comment.authorName}</div>
+                        <div className="rounded-2xl rounded-tl-sm border border-border bg-white p-4 text-sm font-medium leading-relaxed text-foreground shadow-sm">
                             {comment.text}
                         </div>
                     </div>
                 </div>
             ))}
             {comments.length === 0 && (
-                <div className="py-12 text-center text-gray-300 font-bold uppercase tracking-widest text-[10px]">No whispers yet...</div>
+                <div className="py-12 text-center text-sm font-semibold text-muted-foreground">No comments yet.</div>
             )}
           </div>
 
-          <div className="p-6 bg-white border-t border-rose-100 space-y-4">
+          <div className="space-y-4 border-t border-border bg-white p-6">
             {loadingSuggestions ? (
                 <div className="flex gap-2 animate-pulse">
                     <div className="h-6 w-16 bg-gray-100 rounded-full" />
@@ -508,7 +508,7 @@ export default function Feed() {
                         <button 
                             key={i}
                             onClick={() => setNewComment(s.text)}
-                            className="px-3 py-1.5 rounded-full bg-rose-50 text-[10px] font-black text-rose-500 uppercase tracking-widest border border-rose-100 transition-all hover:bg-rose-500 hover:text-white active:scale-95"
+                            className="rounded-full border border-brand-coral/15 bg-brand-blush px-3 py-1.5 text-xs font-bold text-brand-coral transition-all hover:bg-brand-coral hover:text-white active:scale-95"
                         >
                             {s.style}
                         </button>
@@ -520,13 +520,13 @@ export default function Feed() {
                 <Textarea 
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Whisper something..."
-                    className="rounded-2xl bg-gray-50 border-none resize-none h-12 py-3 px-4 font-medium focus-visible:ring-rose-200"
+                    placeholder="Write a comment..."
+                    className="h-12 resize-none rounded-xl border-none bg-muted px-4 py-3 font-medium focus-visible:ring-brand-coral/30"
                 />
                 <Button 
                     onClick={handlePostComment}
                     disabled={!newComment.trim()}
-                    className="w-12 h-12 rounded-2xl bg-rose-500 p-0 flex-shrink-0 shadow-lg shadow-rose-100"
+                    className="h-12 w-12 flex-shrink-0 rounded-xl bg-brand-coral p-0 shadow-sm"
                 >
                     <Send className="w-5 h-5 text-white" />
                 </Button>

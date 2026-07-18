@@ -3,40 +3,28 @@ import type { Request, Response, Router } from 'express';
 import express from 'express';
 import { config } from './config.js';
 import { database } from './database.js';
-
-type AuthProvider = 'google' | 'line' | 'kakao' | 'naver';
-type AppUserRow = {
-  id: string;
-  auth_provider: string;
-  provider_subject: string | null;
-  email: string | null;
-  email_verified: boolean;
-  display_name: string;
-  photo_url: string | null;
-  nationality: 'TH' | 'KR' | null;
-  intent: 'dating' | 'friendship' | 'exchange' | null;
-  interests: string[];
-  languages: string[];
-  bio: string | null;
-  is_profile_complete: boolean;
-  last_active_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type ProviderProfile = {
-  provider: AuthProvider;
-  providerSubject: string;
-  email: string | null;
-  emailVerified: boolean;
-  displayName: string;
-  photoUrl: string | null;
-};
+import {
+  createAuthSession,
+  consumeOAuthState,
+  findUserBySession,
+  revokeAuthSession,
+  saveOAuthState,
+  touchUserLastActive,
+  updateUserProfile,
+  upsertProviderUser,
+} from './data/repositories/auth-repository.js';
+import {
+  type AppUserRow,
+  type AuthProvider,
+  type ProviderProfile,
+  type UserProfileUpdate,
+  isProvider,
+  toUserProfile,
+} from './data/schema.js';
 
 const sessionCookieName = 'seoulmate_auth_session';
 const sessionTtlSeconds = 60 * 60 * 24 * 7;
 const oauthStateTtlSeconds = 60 * 10;
-const oauthProviders = ['google', 'line', 'kakao', 'naver'] as const;
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -95,47 +83,12 @@ function providerConfigured(provider: AuthProvider): boolean {
   return Boolean(config.NAVER_CLIENT_ID && config.NAVER_CLIENT_SECRET);
 }
 
-function toUserProfile(row: AppUserRow) {
-  return {
-    uid: row.id,
-    id: row.id,
-    authProvider: row.auth_provider,
-    providerSubject: row.provider_subject,
-    email: row.email,
-    emailVerified: row.email_verified,
-    displayName: row.display_name,
-    photoURL: row.photo_url ?? '',
-    photoUrl: row.photo_url,
-    nationality: row.nationality ?? undefined,
-    intent: row.intent ?? undefined,
-    interests: row.interests ?? [],
-    languages: row.languages ?? [],
-    bio: row.bio ?? '',
-    isProfileComplete: row.is_profile_complete,
-    lastActiveAt: row.last_active_at?.toISOString() ?? null,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
-  };
-}
-
 async function getCurrentUser(request: Request): Promise<AppUserRow | null> {
   const token = parseCookies(request.headers.cookie)[sessionCookieName];
   if (!token) return null;
-  const result = await database.query<AppUserRow>(
-    `
-      SELECT u.*
-      FROM auth_sessions s
-      JOIN users u ON u.id = s.user_id
-      WHERE s.id = $1
-        AND s.revoked_at IS NULL
-        AND s.expires_at > now()
-      LIMIT 1
-    `,
-    [token],
-  );
-  if (!result.rowCount) return null;
-  const user = result.rows[0];
-  void database.query('UPDATE users SET last_active_at = now() WHERE id = $1', [user.id]);
+  const user = await findUserBySession(token);
+  if (!user) return null;
+  void touchUserLastActive(user.id);
   return user;
 }
 
@@ -150,90 +103,8 @@ async function requireUser(request: Request, response: Response): Promise<AppUse
 
 async function createSession(request: Request, response: Response, userId: string): Promise<void> {
   const sessionId = randomUUID();
-  await database.query(
-    `
-      INSERT INTO auth_sessions (id, user_id, user_agent, ip_address, expires_at)
-      VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 second'))
-    `,
-    [
-      sessionId,
-      userId,
-      request.headers['user-agent'] ?? null,
-      request.ip,
-      sessionTtlSeconds,
-    ],
-  );
+  await createAuthSession(request, sessionId, userId, sessionTtlSeconds);
   response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, sessionId, { maxAge: sessionTtlSeconds }));
-}
-
-async function saveOAuthState(request: Request, provider: AuthProvider, state: string): Promise<void> {
-  await database.query(
-    `
-      INSERT INTO oauth_states (state, provider, user_agent, ip_address, expires_at)
-      VALUES ($1, $2, $3, $4, now() + ($5::int * interval '1 second'))
-    `,
-    [
-      state,
-      provider,
-      request.headers['user-agent'] ?? null,
-      request.ip,
-      oauthStateTtlSeconds,
-    ],
-  );
-}
-
-async function consumeOAuthState(provider: AuthProvider, state: string): Promise<boolean> {
-  const result = await database.query(
-    `
-      UPDATE oauth_states
-      SET consumed_at = now()
-      WHERE provider = $1
-        AND state = $2
-        AND consumed_at IS NULL
-        AND expires_at > now()
-      RETURNING state
-    `,
-    [provider, state],
-  );
-  return Boolean(result.rowCount);
-}
-
-async function upsertProviderUser(profile: ProviderProfile): Promise<AppUserRow> {
-  const userId = `${profile.provider}:${profile.providerSubject}`;
-  const result = await database.query<AppUserRow>(
-    `
-      INSERT INTO users (
-        id,
-        auth_provider,
-        provider_subject,
-        email,
-        email_verified,
-        display_name,
-        photo_url,
-        last_active_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-      ON CONFLICT (id) DO UPDATE SET
-        auth_provider = EXCLUDED.auth_provider,
-        provider_subject = EXCLUDED.provider_subject,
-        email = COALESCE(EXCLUDED.email, users.email),
-        email_verified = users.email_verified OR EXCLUDED.email_verified,
-        display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), users.display_name),
-        photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
-        last_active_at = now()
-      RETURNING *
-    `,
-    [
-      userId,
-      profile.provider,
-      profile.providerSubject,
-      profile.email,
-      profile.emailVerified,
-      profile.displayName || `${profile.provider} user`,
-      profile.photoUrl,
-    ],
-  );
-  return result.rows[0];
 }
 
 async function exchangeGoogle(code: string): Promise<ProviderProfile> {
@@ -421,10 +292,6 @@ async function exchangeProvider(provider: AuthProvider, code: string, state: str
   return exchangeNaver(code, state);
 }
 
-function isProvider(value: string): value is AuthProvider {
-  return oauthProviders.includes(value as AuthProvider);
-}
-
 function dateJson(value: Date | null): string | null {
   return value ? value.toISOString() : null;
 }
@@ -458,7 +325,7 @@ export function createApiRouter(): Router {
       return;
     }
     const state = randomUUID();
-    await saveOAuthState(request, provider, state);
+    await saveOAuthState(request, provider, state, oauthStateTtlSeconds);
     response.setHeader(
       'Set-Cookie',
       serializeCookie(`seoulmate_oauth_state_${provider}`, state, {
@@ -514,7 +381,7 @@ export function createApiRouter(): Router {
   router.post('/v1/auth/logout', async (request, response) => {
     const token = parseCookies(request.headers.cookie)[sessionCookieName];
     if (token) {
-      await database.query('UPDATE auth_sessions SET revoked_at = now() WHERE id = $1', [token]);
+      await revokeAuthSession(token);
     }
     response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, '', { maxAge: 1 }));
     response.json({ ok: true });
@@ -523,34 +390,9 @@ export function createApiRouter(): Router {
   router.put('/v1/me/profile', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
-    const body = request.body as Partial<{
-      displayName: string;
-      nationality: 'TH' | 'KR';
-      intent: 'dating' | 'friendship' | 'exchange';
-      bio: string;
-    }>;
-    const result = await database.query<AppUserRow>(
-      `
-        UPDATE users
-        SET
-          display_name = COALESCE(NULLIF($2::text, ''), display_name),
-          nationality = $3::text,
-          intent = $4::text,
-          bio = $5::text,
-          is_profile_complete = ($3::text IS NOT NULL AND $4::text IS NOT NULL),
-          last_active_at = now()
-        WHERE id = $1
-        RETURNING *
-      `,
-      [
-        user.id,
-        body.displayName ?? null,
-        body.nationality ?? null,
-        body.intent ?? null,
-        body.bio ?? null,
-      ],
-    );
-    response.json({ profile: toUserProfile(result.rows[0]) });
+    const body = request.body as UserProfileUpdate;
+    const updated = await updateUserProfile(user.id, body);
+    response.json({ profile: toUserProfile(updated) });
   });
 
   router.get('/v1/topics', async (request, response) => {

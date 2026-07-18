@@ -98,7 +98,7 @@ export default function Landing() {
               </div>
             )}
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="mt-8 grid gap-3 sm:grid-cols-[minmax(21rem,1fr)_auto]">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {authProviders.map((provider) => (
                   <Button
@@ -108,8 +108,8 @@ export default function Landing() {
                     size="lg"
                     className={
                       provider.id === 'naver'
-                        ? 'action-primary h-13 rounded-xl px-4 text-sm font-extrabold'
-                        : 'h-13 rounded-xl border border-border bg-white px-4 text-sm font-extrabold text-muted-foreground shadow-sm'
+                        ? 'action-primary h-12 rounded-xl px-3 text-sm font-extrabold'
+                        : 'h-12 rounded-xl border border-border bg-white px-3 text-sm font-extrabold text-muted-foreground shadow-sm'
                     }
                   >
                     {provider.label}

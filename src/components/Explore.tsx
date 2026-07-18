@@ -22,7 +22,7 @@ export default function Explore() {
         setUsers(result.users);
       } catch (error) {
         console.error(error);
-        toast.error("No souls found yet");
+        toast.error("No profiles found yet");
       }
     };
     
@@ -43,13 +43,13 @@ export default function Explore() {
   };
 
   if (users.length === 0) {
-    return <div className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest">No souls found yet...</div>;
+    return <div className="px-6 py-16 text-center text-sm font-semibold text-muted-foreground">No profiles are ready yet.</div>;
   }
 
   const currentUser = users[currentIndex];
 
   if (!currentUser) {
-    return <div className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest">You've reached the end of explorations!</div>;
+    return <div className="px-6 py-16 text-center text-sm font-semibold text-muted-foreground">You have seen everyone for now.</div>;
   }
 
   return (
@@ -62,31 +62,31 @@ export default function Explore() {
            exit={{ opacity: 0, scale: 1.1, rotate: 2 }}
            className="w-full max-w-sm h-full max-h-[600px]"
         >
-          <Card className="h-full rounded-[3rem] border-none shadow-2xl overflow-hidden relative group border-4 border-white">
+          <Card className="relative h-full overflow-hidden rounded-3xl border border-white shadow-[0_22px_60px_oklch(0.25_0.07_282/14%)] group">
             <img 
                 src={currentUser.photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${currentUser.displayName}`} 
                 alt={currentUser.displayName}
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
+                className="h-full w-full object-cover transition-all duration-700 group-hover:scale-[1.04]"
             />
             
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-8 text-white">
+            <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/86 via-black/24 to-transparent p-7 text-white">
                 <div className="flex items-center gap-2 mb-4">
-                    <span className="text-[10px] font-black uppercase py-1.5 px-3 bg-indigo-600 rounded-full tracking-widest shadow-lg shadow-indigo-900/40">
-                        {currentUser.nationality === 'TH' ? '🇹🇭 THAILAND' : '🇰🇷 KOREA'}
+                    <span className="rounded-full bg-white/16 px-3 py-1.5 text-xs font-semibold backdrop-blur-md">
+                        {currentUser.nationality === 'TH' ? 'Thailand' : 'Korea'}
                     </span>
-                    <span className="text-[10px] font-black uppercase py-1.5 px-3 bg-rose-500 rounded-full tracking-widest shadow-lg shadow-rose-900/40">
-                        {currentUser.intent === 'dating' ? 'DATING' : currentUser.intent === 'friendship' ? 'FRIENDS' : 'EXCHANGE'}
+                    <span className="rounded-full bg-brand-coral px-3 py-1.5 text-xs font-semibold shadow-lg shadow-black/20">
+                        {currentUser.intent === 'dating' ? 'Dating' : currentUser.intent === 'friendship' ? 'Friends' : 'Exchange'}
                     </span>
                 </div>
-                <h3 className="text-4xl font-black italic tracking-tighter mb-2 drop-shadow-lg">{currentUser.displayName}</h3>
-                <p className="text-sm text-gray-200 line-clamp-3 mb-8 font-bold leading-relaxed italic opacity-90">
-                   "{currentUser.bio || "No bio yet. Let's start our vibrant connection tonight!"}"
+                <h3 className="mb-2 text-4xl font-extrabold leading-tight drop-shadow-lg">{currentUser.displayName}</h3>
+                <p className="mb-8 line-clamp-3 text-sm font-medium leading-6 text-white/84">
+                   {currentUser.bio || "No bio yet. Start with a simple hello and shared context."}
                 </p>
 
                 <div className="flex gap-4 mb-2">
                     <Button 
                         onClick={() => setCurrentIndex(prev => prev + 1)}
-                        className="w-16 h-16 bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white rounded-3xl border border-white/20 font-bold transition-all active:scale-90"
+                        className="h-16 w-16 rounded-2xl border border-white/22 bg-white/18 font-bold text-white backdrop-blur-xl transition-all hover:bg-white/28 active:scale-95"
                     >
                         <X className="w-8 h-8" />
                     </Button>
@@ -95,9 +95,9 @@ export default function Explore() {
                             startChat(currentUser);
                             setCurrentIndex(prev => prev + 1);
                         }}
-                        className="flex-1 h-16 bg-rose-500 hover:bg-rose-600 text-white rounded-3xl shadow-2xl shadow-rose-900/50 font-black italic text-xl tracking-tighter transition-all active:scale-95"
+                        className="h-16 flex-1 rounded-2xl bg-brand-coral text-base font-extrabold text-white shadow-xl shadow-black/20 transition-all hover:bg-brand-coral/90 active:scale-95"
                     >
-                        CONNECT ♥
+                        Connect
                     </Button>
                 </div>
             </div>
