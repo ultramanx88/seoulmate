@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { apiRequest, AuthProvider as OAuthProvider, startOAuth } from '../lib/api';
+import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-react';
+import { apiRequest, setAuthTokenGetter } from '../lib/api';
 
 export enum OperationType {
   CREATE = 'create',
@@ -10,14 +11,14 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleDataOperationError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {},
     operationType,
     path,
   };
-  console.error('Legacy data operation error:', JSON.stringify(errInfo));
+  console.error('Data operation error:', JSON.stringify(errInfo));
   return errInfo;
 }
 
@@ -44,7 +45,6 @@ interface AuthContextType {
   user: UserProfile | null;
   profile: UserProfile | null;
   loading: boolean;
-  login: (provider?: OAuthProvider) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -52,15 +52,35 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const clerkAuth = useClerkAuth();
+  const { user: clerkUser, isLoaded: clerkUserLoaded } = useUser();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = async () => {
+    if (!clerkAuth.isSignedIn) {
+      setUser(null);
+      setProfile(null);
+      return;
+    }
+
     try {
       const result = await apiRequest<{ user: UserProfile; profile: UserProfile }>('/v1/auth/me');
-      setUser(result.user);
-      setProfile(result.profile);
+      const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
+      const clerkName = clerkUser?.fullName ?? clerkUser?.username ?? clerkEmail ?? null;
+      const clerkPhoto = clerkUser?.imageUrl ?? '';
+      const mergedProfile = {
+        ...result.profile,
+        email: result.profile.email ?? clerkEmail,
+        displayName: result.profile.displayName === 'Seoulmate user' && clerkName
+          ? clerkName
+          : result.profile.displayName,
+        photoURL: result.profile.photoURL || clerkPhoto,
+        photoUrl: result.profile.photoUrl || clerkPhoto || null,
+      };
+      setUser(mergedProfile);
+      setProfile(mergedProfile);
     } catch {
       setUser(null);
       setProfile(null);
@@ -68,21 +88,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    refreshProfile().finally(() => setLoading(false));
-  }, []);
+    setAuthTokenGetter(() => clerkAuth.getToken());
+    return () => setAuthTokenGetter(null);
+  }, [clerkAuth.getToken]);
 
-  const login = async (provider: OAuthProvider = 'google') => {
-    startOAuth(provider);
-  };
+  useEffect(() => {
+    if (!clerkAuth.isLoaded || !clerkUserLoaded) return;
+    setLoading(true);
+    refreshProfile().finally(() => setLoading(false));
+  }, [clerkAuth.isLoaded, clerkAuth.isSignedIn, clerkUserLoaded, clerkUser?.id]);
 
   const logout = async () => {
-    await apiRequest('/v1/auth/logout', { method: 'POST' });
+    await clerkAuth.signOut();
     setUser(null);
     setProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, logout, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

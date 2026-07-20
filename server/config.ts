@@ -21,23 +21,11 @@ const envSchema = z.object({
   TRUST_PROXY: booleanFromString,
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   APP_URL: z.string().default('http://localhost:8080'),
-  AUTH_SESSION_SECRET: z.string().default(''),
-  AUTH_SUCCESS_URL: z.string().default(''),
-  AUTH_FAILURE_URL: z.string().default(''),
-  GOOGLE_CLIENT_ID: z.string().default(''),
-  GOOGLE_CLIENT_SECRET: z.string().default(''),
-  GOOGLE_REDIRECT_URI: z.string().default(''),
-  LINE_CHANNEL_ID: z.string().default(''),
-  LINE_CHANNEL_SECRET: z.string().default(''),
-  LINE_REDIRECT_URI: z.string().default(''),
-  KAKAO_REST_API_KEY: z.string().default(''),
-  KAKAO_CLIENT_SECRET: z.string().default(''),
-  KAKAO_REDIRECT_URI: z.string().default(''),
-  NAVER_CLIENT_ID: z.string().default(''),
-  NAVER_CLIENT_SECRET: z.string().default(''),
-  NAVER_REDIRECT_URI: z.string().default(''),
+  CLERK_SECRET_KEY: z.string().default(''),
+  CLERK_JWT_KEY: z.string().default(''),
+  CLERK_AUTHORIZED_PARTIES: z.string().default(''),
   ADMIN_SUPER_EMAIL: z.string().email().optional().or(z.literal('')).default(''),
-  ADMIN_SUPER_PASSWORD: z.string().min(12).optional().or(z.literal('')).default(''),
+  ADMIN_SUPER_PASSWORD: z.string().min(8).optional().or(z.literal('')).default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -50,6 +38,9 @@ if (!parsed.success) {
 export const config = {
   ...parsed.data,
   corsOrigins: parsed.data.CORS_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  clerkAuthorizedParties: parsed.data.CLERK_AUTHORIZED_PARTIES.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
 };

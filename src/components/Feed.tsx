@@ -99,7 +99,9 @@ export default function Feed() {
       setEnhancedTopic(null);
       toast.success("Moment shared!");
     } catch (e) {
-      toast.error("Failed to share moment");
+      toast.error(e instanceof Error && e.message === 'USAGE_LIMIT_REACHED'
+        ? 'Daily posting limit reached. Pro will raise this limit.'
+        : 'Failed to share moment');
     } finally {
       setSubmitting(false);
     }
@@ -154,7 +156,9 @@ export default function Feed() {
 
       setMatchingResults(results.sort((a, b) => b.score - a.score));
     } catch (e) {
-      toast.error("Match analysis failed");
+      toast.error(e instanceof Error && e.message === 'USAGE_LIMIT_REACHED'
+        ? 'Daily discovery limit reached. Pro will raise this limit.'
+        : 'Match analysis failed');
     } finally {
       setIsMatching(false);
     }
@@ -188,13 +192,16 @@ export default function Feed() {
     setIsTranslating(postId);
     try {
       const targetLang = profile?.nationality === 'TH' ? 'TH' : 'KR';
+      await apiRequest('/v1/me/usage/ai_translations_daily/consume', { method: 'POST' });
       const translated = await geminiService.translatePost(content, targetLang as any);
       setTranslations(prev => ({
         ...prev,
         [postId]: { text: translated, lang: targetLang }
       }));
     } catch (e) {
-      toast.error("Translation failed");
+      toast.error(e instanceof Error && e.message === 'USAGE_LIMIT_REACHED'
+        ? 'Translation limit reached. Pro will raise this limit.'
+        : 'Translation failed');
     } finally {
       setIsTranslating(null);
     }

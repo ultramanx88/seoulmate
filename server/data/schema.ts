@@ -1,6 +1,7 @@
-export const authProviders = ['google', 'line', 'kakao', 'naver'] as const;
+export const authProviders = ['clerk'] as const;
 
 export type AuthProvider = typeof authProviders[number];
+export type UserPlan = 'free' | 'pro';
 
 export type AppUserRow = {
   id: string;
@@ -16,6 +17,7 @@ export type AppUserRow = {
   languages: string[];
   bio: string | null;
   safety_status: 'active' | 'suspended' | 'banned' | 'deleted';
+  plan: UserPlan;
   is_profile_complete: boolean;
   last_active_at: Date | null;
   created_at: Date;
@@ -54,6 +56,7 @@ export type PublicUserProfile = {
   languages: string[];
   bio: string;
   safetyStatus: 'active' | 'suspended' | 'banned' | 'deleted';
+  plan: UserPlan;
   isProfileComplete: boolean;
   lastActiveAt: string | null;
   createdAt: string;
@@ -77,13 +80,10 @@ export function toUserProfile(row: AppUserRow): PublicUserProfile {
     languages: row.languages ?? [],
     bio: row.bio ?? '',
     safetyStatus: row.safety_status,
+    plan: row.plan,
     isProfileComplete: row.is_profile_complete,
     lastActiveAt: row.last_active_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
-}
-
-export function isProvider(value: string): value is AuthProvider {
-  return authProviders.includes(value as AuthProvider);
 }

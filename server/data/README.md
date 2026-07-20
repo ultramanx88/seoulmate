@@ -11,7 +11,7 @@ Use `server/data/app-db.ts` and repositories for normal product and back-office 
 - settings
 - billing metadata
 - permissions
-- OAuth sessions and non-critical account state
+- Clerk-linked users and non-critical account state
 
 This lane favors maintainability, clear TypeScript row types, and centralized schema mapping.
 Repository functions should return typed rows or DTOs from `server/data/schema.ts`.

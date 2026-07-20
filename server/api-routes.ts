@@ -1,33 +1,32 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { verifyToken } from '@clerk/backend';
 import type { Request, Response, Router } from 'express';
 import express from 'express';
 import { config } from './config.js';
 import { database } from './database.js';
 import {
-  createAuthSession,
-  consumeOAuthState,
-  findUserBySession,
-  revokeAuthSession,
-  saveOAuthState,
   touchUserLastActive,
   updateUserProfile,
   upsertProviderUser,
 } from './data/repositories/auth-repository.js';
 import {
+  consumeUsage,
+  entitlementsForPlan,
+  getUsage,
+  type FeatureKey,
+  setUserPlan,
+  type Entitlement,
+} from './data/entitlements.js';
+import {
   type AppUserRow,
-  type AuthProvider,
   type ProviderProfile,
   type UserProfileUpdate,
-  isProvider,
   toUserProfile,
 } from './data/schema.js';
 
-const sessionCookieName = 'seoulmate_auth_session';
 const adminSessionCookieName = 'seoulmate_admin_session';
-const sessionTtlSeconds = 60 * 60 * 24 * 7;
 const adminSessionTtlSeconds = 60 * 60 * 12;
-const oauthStateTtlSeconds = 60 * 10;
 const scrypt = promisify(scryptCallback);
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -54,37 +53,6 @@ function serializeCookie(
   if (config.NODE_ENV === 'production') parts.push('Secure');
   if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
   return parts.join('; ');
-}
-
-function authSuccessUrl(provider: AuthProvider): string {
-  const url = new URL(config.AUTH_SUCCESS_URL || config.APP_URL);
-  url.searchParams.set('auth', provider);
-  return url.toString();
-}
-
-function authFailureUrl(reason: string): string {
-  const url = new URL(config.AUTH_FAILURE_URL || config.APP_URL);
-  url.searchParams.set('auth', 'failed');
-  url.searchParams.set('reason', reason);
-  return url.toString();
-}
-
-function providerRedirectUri(provider: AuthProvider): string {
-  const explicit = {
-    google: config.GOOGLE_REDIRECT_URI,
-    line: config.LINE_REDIRECT_URI,
-    kakao: config.KAKAO_REDIRECT_URI,
-    naver: config.NAVER_REDIRECT_URI,
-  }[provider];
-  return explicit || `${config.APP_URL.replace(/\/$/, '')}/v1/auth/${provider}/callback`;
-}
-
-function providerConfigured(provider: AuthProvider): boolean {
-  if (!config.AUTH_SESSION_SECRET) return false;
-  if (provider === 'google') return Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET);
-  if (provider === 'line') return Boolean(config.LINE_CHANNEL_ID && config.LINE_CHANNEL_SECRET);
-  if (provider === 'kakao') return Boolean(config.KAKAO_REST_API_KEY);
-  return Boolean(config.NAVER_CLIENT_ID && config.NAVER_CLIENT_SECRET);
 }
 
 async function hashPassword(password: string): Promise<string> {
@@ -135,12 +103,31 @@ async function ensureSuperadminSeeded(): Promise<void> {
 }
 
 async function getCurrentUser(request: Request): Promise<AppUserRow | null> {
-  const token = parseCookies(request.headers.cookie)[sessionCookieName];
+  const token = bearerToken(request) ?? parseCookies(request.headers.cookie).__session;
   if (!token) return null;
-  const user = await findUserBySession(token);
-  if (!user) return null;
-  void touchUserLastActive(user.id);
-  return user;
+  if (!config.CLERK_SECRET_KEY && !config.CLERK_JWT_KEY) return null;
+  try {
+    const claims = await verifyToken(token, {
+      secretKey: config.CLERK_SECRET_KEY || undefined,
+      jwtKey: config.CLERK_JWT_KEY || undefined,
+      authorizedParties: config.clerkAuthorizedParties.length ? config.clerkAuthorizedParties : undefined,
+    });
+    if (!claims.sub) return null;
+    const clerkProfile: ProviderProfile = {
+      provider: 'clerk',
+      providerSubject: claims.sub,
+      email: typeof claims.email === 'string' ? claims.email : null,
+      emailVerified: Boolean(claims.email_verified),
+      displayName: typeof claims.name === 'string' ? claims.name : 'Seoulmate user',
+      photoUrl: typeof claims.picture === 'string' ? claims.picture : null,
+    };
+    const user = await upsertProviderUser(clerkProfile);
+    void touchUserLastActive(user.id);
+    return user;
+  } catch (error) {
+    console.warn('Clerk token verification failed', error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 async function requireUser(request: Request, response: Response): Promise<AppUserRow | null> {
@@ -156,10 +143,10 @@ async function requireUser(request: Request, response: Response): Promise<AppUse
   return user;
 }
 
-async function createSession(request: Request, response: Response, userId: string): Promise<void> {
-  const sessionId = randomUUID();
-  await createAuthSession(request, sessionId, userId, sessionTtlSeconds);
-  response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, sessionId, { maxAge: sessionTtlSeconds }));
+function bearerToken(request: Request): string | null {
+  const header = request.get('authorization') ?? '';
+  const [scheme, token] = header.split(' ');
+  return scheme?.toLowerCase() === 'bearer' && token ? token : null;
 }
 
 type AdminRow = {
@@ -234,191 +221,6 @@ async function hasBlockBetween(userId: string, otherUserId: string): Promise<boo
   return Boolean(result.rowCount);
 }
 
-async function exchangeGoogle(code: string): Promise<ProviderProfile> {
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: config.GOOGLE_CLIENT_ID,
-      client_secret: config.GOOGLE_CLIENT_SECRET,
-      redirect_uri: providerRedirectUri('google'),
-      grant_type: 'authorization_code',
-    }),
-  });
-  if (!tokenResponse.ok) throw new Error('google_token_exchange_failed');
-  const token = await tokenResponse.json() as { access_token: string };
-  const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-    headers: { authorization: `Bearer ${token.access_token}` },
-  });
-  if (!profileResponse.ok) throw new Error('google_profile_failed');
-  const profile = await profileResponse.json() as {
-    sub: string;
-    email?: string;
-    email_verified?: boolean;
-    name?: string;
-    picture?: string;
-  };
-  return {
-    provider: 'google',
-    providerSubject: profile.sub,
-    email: profile.email ?? null,
-    emailVerified: Boolean(profile.email_verified),
-    displayName: profile.name ?? profile.email ?? 'Google user',
-    photoUrl: profile.picture ?? null,
-  };
-}
-
-async function exchangeLine(code: string): Promise<ProviderProfile> {
-  const tokenResponse = await fetch('https://api.line.me/oauth2/v2.1/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: providerRedirectUri('line'),
-      client_id: config.LINE_CHANNEL_ID,
-      client_secret: config.LINE_CHANNEL_SECRET,
-    }),
-  });
-  if (!tokenResponse.ok) throw new Error('line_token_exchange_failed');
-  const token = await tokenResponse.json() as { access_token: string };
-  const profileResponse = await fetch('https://api.line.me/v2/profile', {
-    headers: { authorization: `Bearer ${token.access_token}` },
-  });
-  if (!profileResponse.ok) throw new Error('line_profile_failed');
-  const profile = await profileResponse.json() as {
-    userId: string;
-    displayName: string;
-    pictureUrl?: string;
-  };
-  return {
-    provider: 'line',
-    providerSubject: profile.userId,
-    email: null,
-    emailVerified: false,
-    displayName: profile.displayName,
-    photoUrl: profile.pictureUrl ?? null,
-  };
-}
-
-async function exchangeKakao(code: string): Promise<ProviderProfile> {
-  const body = new URLSearchParams({
-    code,
-    grant_type: 'authorization_code',
-    redirect_uri: providerRedirectUri('kakao'),
-    client_id: config.KAKAO_REST_API_KEY,
-  });
-  if (config.KAKAO_CLIENT_SECRET) body.set('client_secret', config.KAKAO_CLIENT_SECRET);
-  const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!tokenResponse.ok) throw new Error('kakao_token_exchange_failed');
-  const token = await tokenResponse.json() as { access_token: string };
-  const profileResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
-    headers: { authorization: `Bearer ${token.access_token}` },
-  });
-  if (!profileResponse.ok) throw new Error('kakao_profile_failed');
-  const profile = await profileResponse.json() as {
-    id: number;
-    kakao_account?: {
-      email?: string;
-      is_email_verified?: boolean;
-      profile?: { nickname?: string; profile_image_url?: string };
-    };
-    properties?: { nickname?: string; profile_image?: string };
-  };
-  return {
-    provider: 'kakao',
-    providerSubject: String(profile.id),
-    email: profile.kakao_account?.email ?? null,
-    emailVerified: Boolean(profile.kakao_account?.is_email_verified),
-    displayName: profile.kakao_account?.profile?.nickname ?? profile.properties?.nickname ?? 'Kakao user',
-    photoUrl: profile.kakao_account?.profile?.profile_image_url ?? profile.properties?.profile_image ?? null,
-  };
-}
-
-async function exchangeNaver(code: string, state: string): Promise<ProviderProfile> {
-  const tokenUrl = new URL('https://nid.naver.com/oauth2.0/token');
-  tokenUrl.searchParams.set('grant_type', 'authorization_code');
-  tokenUrl.searchParams.set('client_id', config.NAVER_CLIENT_ID);
-  tokenUrl.searchParams.set('client_secret', config.NAVER_CLIENT_SECRET);
-  tokenUrl.searchParams.set('code', code);
-  tokenUrl.searchParams.set('state', state);
-  const tokenResponse = await fetch(tokenUrl);
-  if (!tokenResponse.ok) throw new Error('naver_token_exchange_failed');
-  const token = await tokenResponse.json() as { access_token: string };
-  const profileResponse = await fetch('https://openapi.naver.com/v1/nid/me', {
-    headers: { authorization: `Bearer ${token.access_token}` },
-  });
-  if (!profileResponse.ok) throw new Error('naver_profile_failed');
-  const payload = await profileResponse.json() as {
-    response: {
-      id: string;
-      email?: string;
-      name?: string;
-      nickname?: string;
-      profile_image?: string;
-    };
-  };
-  const profile = payload.response;
-  return {
-    provider: 'naver',
-    providerSubject: profile.id,
-    email: profile.email ?? null,
-    emailVerified: Boolean(profile.email),
-    displayName: profile.name ?? profile.nickname ?? profile.email ?? 'Naver user',
-    photoUrl: profile.profile_image ?? null,
-  };
-}
-
-function buildAuthorizeUrl(provider: AuthProvider, state: string): string {
-  if (provider === 'google') {
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', config.GOOGLE_CLIENT_ID);
-    url.searchParams.set('redirect_uri', providerRedirectUri(provider));
-    url.searchParams.set('state', state);
-    url.searchParams.set('scope', 'openid email profile');
-    url.searchParams.set('access_type', 'offline');
-    url.searchParams.set('prompt', 'select_account');
-    return url.toString();
-  }
-  if (provider === 'line') {
-    const url = new URL('https://access.line.me/oauth2/v2.1/authorize');
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', config.LINE_CHANNEL_ID);
-    url.searchParams.set('redirect_uri', providerRedirectUri(provider));
-    url.searchParams.set('state', state);
-    url.searchParams.set('scope', 'profile openid email');
-    return url.toString();
-  }
-  if (provider === 'kakao') {
-    const url = new URL('https://kauth.kakao.com/oauth/authorize');
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('client_id', config.KAKAO_REST_API_KEY);
-    url.searchParams.set('redirect_uri', providerRedirectUri(provider));
-    url.searchParams.set('state', state);
-    url.searchParams.set('scope', 'profile_nickname profile_image account_email');
-    return url.toString();
-  }
-  const url = new URL('https://nid.naver.com/oauth2.0/authorize');
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', config.NAVER_CLIENT_ID);
-  url.searchParams.set('redirect_uri', providerRedirectUri(provider));
-  url.searchParams.set('state', state);
-  return url.toString();
-}
-
-async function exchangeProvider(provider: AuthProvider, code: string, state: string): Promise<ProviderProfile> {
-  if (provider === 'google') return exchangeGoogle(code);
-  if (provider === 'line') return exchangeLine(code);
-  if (provider === 'kakao') return exchangeKakao(code);
-  return exchangeNaver(code, state);
-}
-
 function dateJson(value: Date | null): string | null {
   return value ? value.toISOString() : null;
 }
@@ -437,6 +239,51 @@ function topicJson(row: any, author: AppUserRow | null = null) {
     authorPhoto: row.author_photo ?? author?.photo_url,
     authorNationality: row.author_nationality ?? author?.nationality,
   };
+}
+
+async function entitlementJson(user: AppUserRow) {
+  const entitlements = entitlementsForPlan(user.plan);
+  const entries = await Promise.all(
+    Object.entries(entitlements).map(async ([featureKey, entitlement]) => {
+      if (!entitlement.period) {
+        return [featureKey, { ...entitlement, used: null, remaining: null, resetAt: null }];
+      }
+      const usage = await getUsage(user.id, featureKey as FeatureKey, entitlement.period);
+      const used = usage.used_count ?? 0;
+      return [
+        featureKey,
+        {
+          ...entitlement,
+          used,
+          remaining: entitlement.limit === null ? null : Math.max(0, entitlement.limit - used),
+          resetAt: usage.reset_at.toISOString(),
+        },
+      ];
+    }),
+  );
+  return {
+    plan: user.plan,
+    entitlements: Object.fromEntries(entries) as Record<FeatureKey, Entitlement & {
+      used: number | null;
+      remaining: number | null;
+      resetAt: string | null;
+    }>,
+  };
+}
+
+async function tryConsumeUsage(response: Response, user: AppUserRow, featureKey: FeatureKey): Promise<boolean> {
+  try {
+    await consumeUsage(user, featureKey);
+    return true;
+  } catch (error) {
+    const status = (error as Error & { status?: number }).status ?? 500;
+    response.status(status).json({
+      error: error instanceof Error ? error.message : 'ENTITLEMENT_ERROR',
+      feature: featureKey,
+      plan: user.plan,
+    });
+    return false;
+  }
 }
 
 export function createApiRouter(): Router {
@@ -636,59 +483,40 @@ export function createApiRouter(): Router {
     response.json({ user: toUserProfile(result.rows[0]) });
   });
 
-  router.get('/v1/auth/:provider/start', async (request, response) => {
-    const { provider } = request.params;
-    if (!isProvider(provider)) {
-      response.status(404).json({ error: 'UNKNOWN_PROVIDER' });
+  router.patch('/v1/admin/users/:userId/plan', async (request, response) => {
+    const admin = await requireAdmin(request, response);
+    if (!admin) return;
+    const body = request.body as { plan?: string; reason?: string; months?: number };
+    if (body.plan !== 'free' && body.plan !== 'pro') {
+      response.status(400).json({ error: 'INVALID_USER_PLAN' });
       return;
     }
-    if (!providerConfigured(provider)) {
-      response.status(503).json({ error: 'AUTH_PROVIDER_NOT_CONFIGURED', provider });
+    const user = await database.query<AppUserRow>('SELECT * FROM users WHERE id = $1 LIMIT 1', [request.params.userId]);
+    if (!user.rowCount) {
+      response.status(404).json({ error: 'USER_NOT_FOUND' });
       return;
     }
-    const state = randomUUID();
-    await saveOAuthState(request, provider, state, oauthStateTtlSeconds);
-    response.setHeader(
-      'Set-Cookie',
-      serializeCookie(`seoulmate_oauth_state_${provider}`, state, {
-        path: `/v1/auth/${provider}`,
-        maxAge: oauthStateTtlSeconds,
-      }),
+    await setUserPlan(request.params.userId, body.plan, {
+      adminId: admin.id,
+      reason: body.reason,
+      months: body.months ?? 1,
+    });
+    await database.query(
+      `
+        INSERT INTO moderation_actions (id, admin_id, target_type, target_id, action, reason, metadata)
+        VALUES ($1, $2, 'user', $3, $4, $5, $6)
+      `,
+      [
+        randomUUID(),
+        admin.id,
+        request.params.userId,
+        `plan_${body.plan}`,
+        body.reason ?? null,
+        { months: body.months ?? 1 },
+      ],
     );
-    response.redirect(buildAuthorizeUrl(provider, state));
-  });
-
-  router.get('/v1/auth/:provider/callback', async (request, response) => {
-    const { provider } = request.params;
-    if (!isProvider(provider)) {
-      response.redirect(authFailureUrl('unknown_provider'));
-      return;
-    }
-    const code = typeof request.query.code === 'string' ? request.query.code : '';
-    const state = typeof request.query.state === 'string' ? request.query.state : '';
-    const expectedState = parseCookies(request.headers.cookie)[`seoulmate_oauth_state_${provider}`];
-    const cookieStateValid = Boolean(state && expectedState && state === expectedState);
-    const storedStateValid = state ? await consumeOAuthState(provider, state) : false;
-    if (!code || !state || (!cookieStateValid && !storedStateValid)) {
-      response.redirect(authFailureUrl('invalid_state'));
-      return;
-    }
-    try {
-      const providerProfile = await exchangeProvider(provider, code, state);
-      const user = await upsertProviderUser(providerProfile);
-      await createSession(request, response, user.id);
-      response.append(
-        'Set-Cookie',
-        serializeCookie(`seoulmate_oauth_state_${provider}`, '', {
-          path: `/v1/auth/${provider}`,
-          maxAge: 1,
-        }),
-      );
-      response.redirect(authSuccessUrl(provider));
-    } catch (error) {
-      console.error('OAuth callback failed', error);
-      response.redirect(authFailureUrl(`${provider}_callback_failed`));
-    }
+    const updated = await database.query<AppUserRow>('SELECT * FROM users WHERE id = $1 LIMIT 1', [request.params.userId]);
+    response.json({ user: toUserProfile(updated.rows[0]) });
   });
 
   router.get('/v1/auth/me', async (request, response) => {
@@ -700,21 +528,31 @@ export function createApiRouter(): Router {
     response.json({ user: toUserProfile(user), profile: toUserProfile(user) });
   });
 
-  router.post('/v1/auth/logout', async (request, response) => {
-    const token = parseCookies(request.headers.cookie)[sessionCookieName];
-    if (token) {
-      await revokeAuthSession(token);
-    }
-    response.setHeader('Set-Cookie', serializeCookie(sessionCookieName, '', { maxAge: 1 }));
-    response.json({ ok: true });
-  });
-
   router.put('/v1/me/profile', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
     const body = request.body as UserProfileUpdate;
     const updated = await updateUserProfile(user.id, body);
     response.json({ profile: toUserProfile(updated) });
+  });
+
+  router.get('/v1/me/entitlements', async (request, response) => {
+    const user = await requireUser(request, response);
+    if (!user) return;
+    response.json(await entitlementJson(user));
+  });
+
+  router.post('/v1/me/usage/:featureKey/consume', async (request, response) => {
+    const user = await requireUser(request, response);
+    if (!user) return;
+    const featureKey = request.params.featureKey as FeatureKey;
+    const allowed: FeatureKey[] = ['ai_translations_daily', 'profile_review'];
+    if (!allowed.includes(featureKey)) {
+      response.status(400).json({ error: 'FEATURE_USAGE_NOT_CONSUMABLE' });
+      return;
+    }
+    if (!await tryConsumeUsage(response, user, featureKey)) return;
+    response.json(await entitlementJson(user));
   });
 
   router.post('/v1/reports', async (request, response) => {
@@ -827,6 +665,7 @@ export function createApiRouter(): Router {
       response.status(400).json({ error: 'CONTENT_REQUIRED' });
       return;
     }
+    if (!await tryConsumeUsage(response, user, 'posts_daily')) return;
     const id = randomUUID();
     const result = await database.query(
       `
@@ -937,6 +776,7 @@ export function createApiRouter(): Router {
   router.get('/v1/users/discover', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
+    if (!await tryConsumeUsage(response, user, 'discover_profiles_daily')) return;
     const targetNationality = user.nationality === 'TH' ? 'KR' : 'TH';
     const result = await database.query<AppUserRow>(
       `
@@ -962,6 +802,7 @@ export function createApiRouter(): Router {
   router.get('/v1/users/match-candidates', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
+    if (!await tryConsumeUsage(response, user, 'discover_profiles_daily')) return;
     const nationality = typeof request.query.nationality === 'string' ? request.query.nationality : null;
     const result = await database.query<AppUserRow>(
       `
@@ -1057,6 +898,7 @@ export function createApiRouter(): Router {
     const participantKey = participants.join(':');
     let chat = await database.query('SELECT * FROM chats WHERE participant_key = $1 LIMIT 1', [participantKey]);
     if (!chat.rowCount) {
+      if (!await tryConsumeUsage(response, user, 'new_chats_daily')) return;
       const id = randomUUID();
       const client = await database.connect();
       try {

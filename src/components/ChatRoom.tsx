@@ -60,9 +60,16 @@ export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string
     if (translations[messageId]) return;
     
     const targetLang = profile?.nationality === 'TH' ? 'th' : 'ko';
-    toast.info("Translating...");
-    const translated = await geminiService.translateChat(text, targetLang);
-    setTranslations(prev => ({ ...prev, [messageId]: translated }));
+    try {
+      toast.info("Translating...");
+      await apiRequest('/v1/me/usage/ai_translations_daily/consume', { method: 'POST' });
+      const translated = await geminiService.translateChat(text, targetLang);
+      setTranslations(prev => ({ ...prev, [messageId]: translated }));
+    } catch (error) {
+      toast.error(error instanceof Error && error.message === 'USAGE_LIMIT_REACHED'
+        ? 'Translation limit reached. Pro will raise this limit.'
+        : 'Translation failed');
+    }
   };
 
   const getIcebreakers = async () => {

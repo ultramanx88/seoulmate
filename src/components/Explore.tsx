@@ -22,7 +22,9 @@ export default function Explore() {
         setUsers(result.users);
       } catch (error) {
         console.error(error);
-        toast.error("No profiles found yet");
+        toast.error(error instanceof Error && error.message === 'USAGE_LIMIT_REACHED'
+          ? 'Daily discovery limit reached. Pro will raise this limit.'
+          : 'No profiles found yet');
       }
     };
     
@@ -38,7 +40,9 @@ export default function Explore() {
       
       toast.success(`Connected with ${targetUser.displayName}!`);
     } catch (e) {
-      toast.error("Error starting chat");
+      toast.error(e instanceof Error && e.message === 'USAGE_LIMIT_REACHED'
+        ? 'Daily new chat limit reached. Pro will raise this limit.'
+        : 'Error starting chat');
     }
   };
 

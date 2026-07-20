@@ -1,10 +1,8 @@
-import { useAuth } from '../hooks/useAuth';
-import type { AuthProvider } from '../lib/api';
+import { SignInButton, SignUpButton } from '@clerk/clerk-react';
 import { Button } from './ui/button';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
-  AlertCircle,
   CheckCircle2,
   Globe2,
   HeartHandshake,
@@ -25,19 +23,8 @@ const intentRows = [
   { label: 'Exchange', tone: 'Language bridge', className: 'landing-chip-mint' },
 ];
 
-const authProviders: { id: AuthProvider; label: string }[] = [
-  { id: 'naver', label: 'Naver' },
-  { id: 'google', label: 'Google' },
-  { id: 'line', label: 'LINE' },
-  { id: 'kakao', label: 'Kakao' },
-];
-
 export default function Landing() {
-  const { login } = useAuth();
   const reduceMotion = useReducedMotion();
-  const authStatus = new URLSearchParams(window.location.search).get('auth');
-  const authReason = new URLSearchParams(window.location.search).get('reason');
-  const authFailed = authStatus === 'failed';
 
   return (
     <main className="landing-shell relative min-h-dvh overflow-hidden px-5 py-5 sm:px-8">
@@ -84,43 +71,26 @@ export default function Landing() {
               Less shallow swiping. More context before the first message.
             </p>
 
-            {authFailed && (
-              <div className="mt-6 flex max-w-xl gap-3 rounded-2xl border border-destructive/20 bg-white p-4 text-sm font-semibold leading-6 text-foreground shadow-sm">
-                <AlertCircle className="mt-0.5 size-5 flex-shrink-0 text-destructive" />
-                <div>
-                  <p className="font-extrabold">Login could not be completed.</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {authReason === 'invalid_state'
-                      ? 'The secure login check expired or the browser did not return it. Please try Naver again.'
-                      : 'Please try again, or use another provider when it is available.'}
-                  </p>
-                </div>
-              </div>
-            )}
+            <div className="mt-8 grid gap-3 sm:grid-cols-[minmax(18rem,0.72fr)_minmax(12rem,0.34fr)_auto]">
+              <SignUpButton mode="modal">
+                <Button size="lg" className="action-primary h-12 rounded-xl px-4 text-sm font-extrabold">
+                  Create account
+                  <ArrowRight className="ml-1 size-4" />
+                </Button>
+              </SignUpButton>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-[minmax(21rem,1fr)_auto]">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {authProviders.map((provider) => (
-                  <Button
-                    key={provider.id}
-                    disabled={provider.id !== 'naver'}
-                    onClick={() => login(provider.id)}
-                    size="lg"
-                    className={
-                      provider.id === 'naver'
-                        ? 'action-primary h-12 rounded-xl px-3 text-sm font-extrabold'
-                        : 'h-12 rounded-xl border border-border bg-white px-3 text-sm font-extrabold text-muted-foreground shadow-sm'
-                    }
-                  >
-                    {provider.label}
-                    {provider.id === 'naver' && <ArrowRight className="ml-1 size-4" />}
-                  </Button>
-                ))}
-              </div>
+              <SignInButton mode="modal">
+                <Button
+                  size="lg"
+                  className="h-12 rounded-xl border border-border bg-white px-4 text-sm font-extrabold text-brand-ink shadow-sm hover:bg-brand-lilac/50"
+                >
+                  Sign in
+                </Button>
+              </SignInButton>
 
               <div className="landing-assurance">
                 <CheckCircle2 className="size-4 text-brand-mint" />
-                Intent-first profiles before matches
+                Google, LINE, Kakao, and Naver live in Clerk
               </div>
             </div>
 

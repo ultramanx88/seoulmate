@@ -46,6 +46,7 @@ type AdminUser = {
   nationality?: 'TH' | 'KR';
   intent?: string;
   safetyStatus: 'active' | 'suspended' | 'banned' | 'deleted';
+  plan: 'free' | 'pro';
   reportsCount: number;
   createdAt: string;
 };
@@ -55,6 +56,8 @@ const statusTone: Record<string, string> = {
   suspended: 'border-amber-200 bg-amber-50 text-amber-700',
   banned: 'border-destructive/20 bg-destructive/10 text-destructive',
   deleted: 'border-muted bg-muted text-muted-foreground',
+  free: 'border-border bg-white text-muted-foreground',
+  pro: 'border-brand-coral/20 bg-brand-blush text-brand-coral',
   open: 'border-destructive/20 bg-destructive/10 text-destructive',
   reviewing: 'border-amber-200 bg-amber-50 text-amber-700',
   resolved: 'border-brand-mint/40 bg-brand-mint/20 text-brand-ink',
@@ -148,6 +151,21 @@ export default function AdminPanel() {
       body: JSON.stringify({ status, reason: moderationReason || undefined }),
     });
     toast.success('User status updated');
+    setModerationReason('');
+    await loadConsole();
+  };
+
+  const setUserPlan = async (plan: 'free' | 'pro') => {
+    if (!selectedUser) return;
+    await apiRequest(`/v1/admin/users/${selectedUser.id}/plan`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        plan,
+        months: plan === 'pro' ? 1 : undefined,
+        reason: moderationReason || undefined,
+      }),
+    });
+    toast.success(plan === 'pro' ? 'Pro granted' : 'Plan set to Free');
     setModerationReason('');
     await loadConsole();
   };
@@ -305,7 +323,10 @@ export default function AdminPanel() {
                         <p className="truncate font-extrabold text-foreground">{user.displayName}</p>
                         <p className="truncate text-xs font-semibold text-muted-foreground">{user.email ?? user.id}</p>
                       </div>
-                      <Badge className={statusTone[user.safetyStatus]} variant="outline">{user.safetyStatus}</Badge>
+                      <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                        <Badge className={statusTone[user.plan]} variant="outline">{user.plan}</Badge>
+                        <Badge className={statusTone[user.safetyStatus]} variant="outline">{user.safetyStatus}</Badge>
+                      </div>
                     </div>
                     <p className="mt-2 text-xs font-semibold text-muted-foreground">{user.reportsCount} active reports</p>
                   </button>
@@ -329,6 +350,12 @@ export default function AdminPanel() {
                     <Button variant="outline" className="rounded-xl" onClick={() => setUserStatus('suspended')}>Suspend</Button>
                     <Button variant="destructive" className="rounded-xl" onClick={() => setUserStatus('banned')}>
                       <AlertTriangle className="mr-1 size-4" /> Ban
+                    </Button>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="rounded-xl" onClick={() => setUserPlan('free')}>Set Free</Button>
+                    <Button className="rounded-xl bg-brand-ink text-white hover:bg-brand-ink/90" onClick={() => setUserPlan('pro')}>
+                      Grant Pro
                     </Button>
                   </div>
                 </div>

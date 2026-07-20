@@ -43,6 +43,11 @@ services:
     build:
       context: .
       target: production
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
+        VITE_STRIPE_PRICING_TABLE_ID: ${VITE_STRIPE_PRICING_TABLE_ID:-}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+        VITE_STRIPE_CUSTOMER_PORTAL_URL: ${VITE_STRIPE_CUSTOMER_PORTAL_URL:-}
     environment:
       NODE_ENV: production
       PORT: 8080
@@ -56,21 +61,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       APP_URL: ${APP_URL:-http://localhost:8080}
-      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-}
-      AUTH_SUCCESS_URL: ${AUTH_SUCCESS_URL:-http://localhost:3000}
-      AUTH_FAILURE_URL: ${AUTH_FAILURE_URL:-http://localhost:3000}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/v1/auth/google/callback}
-      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-}
-      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
-      LINE_REDIRECT_URI: ${LINE_REDIRECT_URI:-http://localhost:8080/v1/auth/line/callback}
-      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
-      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
-      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8080/v1/auth/kakao/callback}
-      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
-      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
-      NAVER_REDIRECT_URI: ${NAVER_REDIRECT_URI:-http://localhost:8080/v1/auth/naver/callback}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_JWT_KEY: ${CLERK_JWT_KEY:-}
+      CLERK_AUTHORIZED_PARTIES: ${CLERK_AUTHORIZED_PARTIES:-}
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:

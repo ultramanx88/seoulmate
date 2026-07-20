@@ -4,25 +4,26 @@
 
 # SEOULMATE
 
-React application with a production migration stack for moving from Firebase to
-PostgreSQL and Redis without requiring a big-bang cutover.
+React application with Clerk user authentication, PostgreSQL, Redis, Stripe-ready
+entitlements, and a Safety/Admin layer for a trustworthy Thai-Korean dating
+product.
 
 View your app in AI Studio: https://ai.studio/apps/554b0bce-d0ca-41ea-a58d-589a73ebfb99
 
-## Current migration phase
-
-Firebase remains active in the frontend while PostgreSQL and Redis are brought
-online in parallel. Do not remove Firebase until data has been backfilled,
-dual-write has been verified, and reads have been switched to the new API.
+## Current architecture
 
 The PostgreSQL schema currently covers:
 
-- users and Firebase identity mapping
+- users and Clerk identity mapping
 - topics, likes, and comments
 - chats, participants, and messages
 - precomputed feeds
-- idempotent Firebase migration tracking
 - safety reports, user blocks, moderation actions, and admin sessions
+
+User authentication is handled by Clerk. Configure Google, LINE, Kakao, and
+Naver in the Clerk dashboard instead of storing provider secrets in this
+service. The Express API verifies Clerk session tokens and upserts local users
+with `auth_provider = clerk`.
 
 ## Run the frontend locally
 
@@ -30,7 +31,8 @@ Prerequisites: Node.js 22+
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy `.env.example` to `.env` and fill `VITE_CLERK_PUBLISHABLE_KEY`,
+   `CLERK_SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, and `GEMINI_API_KEY`
 3. Run the app:
    `npm run dev`
 
@@ -104,44 +106,32 @@ do not commit real admin credentials.
 
 The safety layer includes:
 
-- admin login/session cookies separate from user sessions
+- admin login/session cookies separate from Clerk user sessions
 - report queues for users, topics, comments, and messages
 - user block/unblock APIs that remove blocked users from discovery and chats
 - user safety states: active, suspended, banned, deleted
 - content moderation states: visible, hidden, removed
 - moderation action audit records
 
-## Recommended Firebase cutover order
+## Plans and Entitlements
 
-1. Export and backfill Firebase users and Firestore documents.
-2. Verify record counts and migration hashes.
-3. Add authenticated API endpoints and dual-write mutations.
-4. Move profile and feed reads to PostgreSQL.
-5. Move chat realtime delivery to Redis pub/sub plus WebSocket.
-6. Run reconciliation and disable Firebase writes.
-7. Remove Firebase client, Cloud Functions, rules, and configuration.
+SEOULMATE is Stripe-ready without requiring Stripe at launch. Users have a
+simple `free` or `pro` plan, and backend usage counters enforce limits before
+paid checkout is connected.
 
-The `firebase_migration_records` table exists so import jobs can be rerun
-idempotently and reconciled before cutover.
+Current gated features:
 
-## Firebase backfill
+- daily posts
+- daily discovery views
+- daily new chats
+- AI translation usage
 
-The importer uses Google Application Default Credentials. Set
-`GOOGLE_APPLICATION_CREDENTIALS`, `FIREBASE_PROJECT_ID`,
-`FIRESTORE_DATABASE_ID`, and `DATABASE_URL`.
+The data model is ready for a later Stripe integration:
 
-Always begin with the default dry-run:
+- `subscriptions`
+- `subscription_events`
+- `usage_counters`
 
-```bash
-MIGRATION_DRY_RUN=true npm run firebase:backfill
-```
-
-After reviewing the counts, enable writes:
-
-```bash
-MIGRATION_DRY_RUN=false npm run firebase:backfill
-```
-
-The command imports Firebase Auth users first, then profiles, topics, comments,
-chats, messages, and precomputed feeds. It upserts existing rows and records a
-source hash for reconciliation.
+Stripe webhooks should update `subscriptions` and `users.plan`; product code
+should continue checking entitlements rather than reading payment-provider
+state directly.
