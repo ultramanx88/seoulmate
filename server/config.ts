@@ -9,13 +9,19 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8080),
   APP_VERSION: z.string().default('development'),
-  DATABASE_URL: z
-    .string()
-    .default('postgresql://seoulmate:seoulmate@localhost:5432/seoulmate'),
+  DATABASE_URL: z.string().default(''),
+  POSTGRES_HOST: z.string().default('localhost'),
+  POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
+  POSTGRES_DB: z.string().default('seoulmate'),
+  POSTGRES_USER: z.string().default('seoulmate'),
+  POSTGRES_PASSWORD: z.string().default('seoulmate'),
   DATABASE_SSL: booleanFromString,
   DATABASE_POOL_MIN: z.coerce.number().int().min(0).default(2),
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(20),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_URL: z.string().default(''),
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.coerce.number().int().positive().default(6379),
+  REDIS_PASSWORD: z.string().default(''),
   REDIS_REQUIRED: booleanFromString,
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   TRUST_PROXY: booleanFromString,
@@ -37,6 +43,25 @@ if (!parsed.success) {
 
 export const config = {
   ...parsed.data,
+  DATABASE_URL: parsed.data.DATABASE_URL || [
+    'postgresql://',
+    encodeURIComponent(parsed.data.POSTGRES_USER),
+    ':',
+    encodeURIComponent(parsed.data.POSTGRES_PASSWORD),
+    '@',
+    parsed.data.POSTGRES_HOST,
+    ':',
+    parsed.data.POSTGRES_PORT,
+    '/',
+    encodeURIComponent(parsed.data.POSTGRES_DB),
+  ].join(''),
+  REDIS_URL: parsed.data.REDIS_URL || [
+    'redis://',
+    parsed.data.REDIS_PASSWORD ? `:${encodeURIComponent(parsed.data.REDIS_PASSWORD)}@` : '',
+    parsed.data.REDIS_HOST,
+    ':',
+    parsed.data.REDIS_PORT,
+  ].join(''),
   corsOrigins: parsed.data.CORS_ORIGINS.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
