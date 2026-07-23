@@ -16,10 +16,16 @@ type TranslationTarget = 'TH' | 'KR';
 
 function AppLoading() {
   return (
-    <div className="app-shell flex h-screen items-center justify-center">
-      <div className="flex items-center gap-3 text-brand-ink">
-        <div className="brand-mark flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold text-white">S</div>
-        <span className="brand-wordmark text-lg">SEOUL<span className="brand-wordmark-accent">MATE</span></span>
+    <div className="app-splash" role="status" aria-label="Loading Seoulmate">
+      <div className="app-splash-inner">
+        <div className="app-splash-mark-wrap">
+          <img className="app-splash-mark" src="/brand/seoulmate-mark.svg" alt="" aria-hidden="true" />
+        </div>
+        <img className="app-splash-wordmark" src="/brand/seoulmate-wordmark.svg" alt="SEOULMATE" />
+        <p className="app-splash-copy">Real chat across Thai and Korean culture.</p>
+        <div className="app-splash-progress" aria-hidden="true">
+          <span />
+        </div>
       </div>
     </div>
   );
