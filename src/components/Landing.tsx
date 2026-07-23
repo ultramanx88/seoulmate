@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 
 const trustSignals = [
-  { icon: ShieldCheck, label: 'Verified intent', detail: 'Dating, friendship, or exchange' },
-  { icon: Languages, label: 'Thai + Korean ready', detail: 'Prompts that survive translation' },
-  { icon: HeartHandshake, label: 'Respect-first pace', detail: 'Less swipe noise, more context' },
+  { icon: ShieldCheck, label: 'Verified intent', detail: 'Dating, friendship, or language exchange' },
+  { icon: Languages, label: 'Real chat ready', detail: 'Thai and Korean nuance without the guesswork' },
+  { icon: HeartHandshake, label: 'Respect-first pace', detail: 'Less swipe noise, more meaningful replies' },
 ];
 
 const intentRows = [
@@ -44,7 +44,7 @@ export default function Landing() {
               <p className="brand-wordmark text-lg leading-none">
                 SEOUL<span className="brand-wordmark-accent">MATE</span>
               </p>
-              <p className="text-xs font-semibold text-muted-foreground">TH / KR social signal</p>
+              <p className="text-xs font-semibold text-muted-foreground">TH / KR real chat</p>
             </div>
           </div>
 
@@ -62,12 +62,12 @@ export default function Landing() {
             </div>
 
             <h1 className="landing-headline mt-5">
-              Meet across culture without losing the signal.
+              Real chat across Thai and Korean culture.
             </h1>
 
             <p className="mt-6 max-w-xl text-base font-medium leading-8 text-muted-foreground sm:text-lg">
-              A Thai-Korean dating and social app built around intent, translation, and trust.
-              Less shallow swiping. More context before the first message.
+              A Thai-Korean dating and social app built around honest intent, thoughtful translation,
+              and conversations that feel human from the first hello.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-[minmax(18rem,0.72fr)_minmax(12rem,0.34fr)_auto]">
@@ -89,7 +89,7 @@ export default function Landing() {
 
               <div className="landing-assurance">
                 <CheckCircle2 className="size-4 text-brand-mint" />
-                Google, LINE, Kakao, and Naver live in Clerk
+                Secure sign in for real chat, not throwaway profiles
               </div>
             </div>
 
@@ -115,7 +115,7 @@ export default function Landing() {
             <div className="landing-preview-top">
               <div>
                 <p className="text-xs font-black text-brand-coral">SEOUL SIGNAL</p>
-                <p className="mt-1 text-xl font-black leading-tight text-brand-ink">A better first hello</p>
+                <p className="mt-1 text-xl font-black leading-tight text-brand-ink">Real chat, translated well</p>
               </div>
               <Sparkles className="size-5 text-brand-coral" />
             </div>
@@ -126,10 +126,10 @@ export default function Landing() {
                 <span className="landing-match-score">intent 92%</span>
               </div>
               <p className="mt-4 text-lg font-black leading-snug text-foreground">
-                “ตลาดกลางคืนที่เชียงใหม่ มีร้านไหนเหมาะกับเดตแรกไหม?”
+                “อยากคุยแบบจริงจัง แต่ไม่อยากให้บรรยากาศหนักเกินไป เริ่มยังไงดี?”
               </p>
               <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
-                “치앙마이 야시장에서 첫 만남에 좋은 곳이 있을까요?”
+                “진지하게 대화하고 싶은데 너무 무겁지 않게 시작하고 싶어요. 어떻게 말하면 좋을까요?”
               </p>
             </div>
 
@@ -145,7 +145,7 @@ export default function Landing() {
             <div className="landing-preview-footer">
               <div>
                 <p className="text-xs font-bold text-muted-foreground">Tonight’s bridge</p>
-                <p className="font-black text-brand-ink">Thai reply + Korean nuance</p>
+                <p className="font-black text-brand-ink">Thai warmth + Korean nuance</p>
               </div>
               <Languages className="size-5 text-brand-mint" />
             </div>
@@ -154,7 +154,7 @@ export default function Landing() {
 
         <div className="landing-rail">
           <span>TH</span>
-          <span>dating with context</span>
+          <span>real chat first</span>
           <span>KR</span>
           <span>language before pressure</span>
           <span>safety before spark</span>
