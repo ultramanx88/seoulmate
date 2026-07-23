@@ -1,5 +1,4 @@
 import { SignInButton, SignUpButton } from '@clerk/clerk-react';
-import { Button } from './ui/button';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
@@ -73,19 +72,19 @@ export default function Landing() {
 
             <div className="mt-8 grid gap-3 sm:grid-cols-[minmax(18rem,0.72fr)_minmax(12rem,0.34fr)_auto]">
               <SignUpButton mode="modal">
-                <Button size="lg" className="action-primary h-12 rounded-xl px-4 text-sm font-extrabold">
+                <button type="button" className="action-primary inline-flex h-12 items-center justify-center rounded-xl px-4 text-sm font-extrabold transition">
                   Create account
                   <ArrowRight className="ml-1 size-4" />
-                </Button>
+                </button>
               </SignUpButton>
 
               <SignInButton mode="modal">
-                <Button
-                  size="lg"
-                  className="h-12 rounded-xl border border-border bg-white px-4 text-sm font-extrabold text-brand-ink shadow-sm hover:bg-brand-lilac/50"
+                <button
+                  type="button"
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-border bg-white px-4 text-sm font-extrabold text-brand-ink shadow-sm transition hover:bg-brand-lilac/50"
                 >
                   Sign in
-                </Button>
+                </button>
               </SignInButton>
 
               <div className="landing-assurance">
