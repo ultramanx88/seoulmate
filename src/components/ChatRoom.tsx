@@ -9,7 +9,17 @@ import { ChevronLeft, Send, Languages, Sparkles } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { toast } from 'sonner';
 
-export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string, otherUser: any, onBack: () => void }) {
+export default function ChatRoom({
+  chatId,
+  otherUser,
+  translationTarget,
+  onBack,
+}: {
+  chatId: string;
+  otherUser: any;
+  translationTarget: 'TH' | 'KR';
+  onBack: () => void;
+}) {
   const { profile } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -59,7 +69,7 @@ export default function ChatRoom({ chatId, otherUser, onBack }: { chatId: string
   const handleTranslate = async (messageId: string, text: string) => {
     if (translations[messageId]) return;
     
-    const targetLang = profile?.nationality === 'TH' ? 'th' : 'ko';
+    const targetLang = translationTarget === 'TH' ? 'th' : 'ko';
     try {
       toast.info("Translating...");
       await apiRequest('/v1/me/usage/ai_translations_daily/consume', { method: 'POST' });

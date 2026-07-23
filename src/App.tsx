@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { UserButton } from '@clerk/clerk-react';
 import { Crown, Heart, MessageCircle, Globe, Settings as SettingsIcon } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 
 const Landing = lazy(() => import('./components/Landing'));
 const ProfileSetup = lazy(() => import('./components/ProfileSetup'));
@@ -11,6 +12,7 @@ const Explore = lazy(() => import('./components/Explore'));
 const ChatList = lazy(() => import('./components/ChatList'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const ProPanel = lazy(() => import('./components/ProPanel'));
+type TranslationTarget = 'TH' | 'KR';
 
 function AppLoading() {
   return (
@@ -55,6 +57,15 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
 function MainApp() {
   const { user, profile, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('feed');
+  const [translationTarget, setTranslationTarget] = useState<TranslationTarget | null>(() => {
+    const saved = window.localStorage.getItem('seoulmate.translationTarget');
+    return saved === 'TH' || saved === 'KR' ? saved : null;
+  });
+
+  useEffect(() => {
+    if (!profile?.nationality || translationTarget) return;
+    setTranslationTarget(profile.nationality === 'TH' ? 'KR' : 'TH');
+  }, [profile?.nationality, translationTarget]);
 
   if (loading) {
     return <AppLoading />;
@@ -64,6 +75,15 @@ function MainApp() {
 
   if (!profile || !profile.nationality) return <ProfileSetup />;
 
+  const activeTranslationTarget = translationTarget ?? (profile.nationality === 'TH' ? 'KR' : 'TH');
+  const translationLabel = activeTranslationTarget === 'KR' ? 'TH → KR' : 'KR → TH';
+  const toggleTranslationTarget = () => {
+    const nextTarget = activeTranslationTarget === 'KR' ? 'TH' : 'KR';
+    setTranslationTarget(nextTarget);
+    window.localStorage.setItem('seoulmate.translationTarget', nextTarget);
+    toast.success(`Translation target: ${nextTarget === 'KR' ? 'Korean' : 'Thai'}`);
+  };
+
   return (
     <div className="app-shell">
       <header className="top-bar sticky top-0 z-40 border-b px-4 py-4 flex items-center justify-between">
@@ -72,9 +92,15 @@ function MainApp() {
           <h1 className="brand-wordmark text-xl">SEOUL<span className="brand-wordmark-accent">MATE</span></h1>
         </div>
         <div className="flex items-center gap-2">
-            <span className="locale-chip">
-                {profile.nationality === 'TH' ? 'TH ⇄ KR' : 'KR ⇄ TH'}
-            </span>
+            <button
+              type="button"
+              onClick={toggleTranslationTarget}
+              className="locale-chip transition hover:-translate-y-0.5 hover:border-brand-coral/30 hover:bg-brand-blush"
+              aria-label={`Switch translation target. Current target is ${activeTranslationTarget === 'KR' ? 'Korean' : 'Thai'}.`}
+              title="Switch translation target"
+            >
+                {translationLabel}
+            </button>
             <UserButton
               appearance={{
                 elements: {
@@ -87,9 +113,9 @@ function MainApp() {
       </header>
 
       <main className="mobile-frame h-full">
-        {activeTab === 'feed' && <Feed />}
+        {activeTab === 'feed' && <Feed translationTarget={activeTranslationTarget} />}
         {activeTab === 'explore' && <Explore />}
-        {activeTab === 'chats' && <ChatList />}
+        {activeTab === 'chats' && <ChatList translationTarget={activeTranslationTarget} />}
         {activeTab === 'pro' && <ProPanel />}
         {activeTab === 'profile' && <ProfileSetup existingProfile={profile} />}
       </main>

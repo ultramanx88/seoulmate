@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
 import ChatRoom from './ChatRoom';
 
-export default function ChatList() {
+export default function ChatList({ translationTarget }: { translationTarget: 'TH' | 'KR' }) {
   const { profile } = useAuth();
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export default function ChatList() {
 
   if (selectedChatId) {
     const chat = chats.find(c => c.id === selectedChatId);
-    return <ChatRoom chatId={selectedChatId} otherUser={chat?.otherUser} onBack={() => setSelectedChatId(null)} />;
+    return <ChatRoom chatId={selectedChatId} otherUser={chat?.otherUser} translationTarget={translationTarget} onBack={() => setSelectedChatId(null)} />;
   }
 
   return (

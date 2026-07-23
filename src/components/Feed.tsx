@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { geminiService } from '../services/gemini';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 
-export default function Feed() {
+export default function Feed({ translationTarget }: { translationTarget: 'TH' | 'KR' }) {
   const { profile } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +194,7 @@ export default function Feed() {
 
     setIsTranslating(postId);
     try {
-      const targetLang = profile?.nationality === 'TH' ? 'TH' : 'KR';
+      const targetLang = translationTarget;
       await apiRequest('/v1/me/usage/ai_translations_daily/consume', { method: 'POST' });
       const translated = await geminiService.translatePost(content, targetLang as any);
       setTranslations(prev => ({
