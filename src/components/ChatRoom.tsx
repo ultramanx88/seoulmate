@@ -92,7 +92,12 @@ export default function ChatRoom({
   return (
     <div className="absolute inset-0 z-50 flex h-[calc(100vh-64px)] flex-col bg-background">
       <header className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-white p-5">
-        <button onClick={onBack} className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted transition-colors hover:bg-brand-blush">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to conversations"
+          className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted transition-colors hover:bg-brand-blush"
+        >
             <ChevronLeft className="w-6 h-6 text-muted-foreground" />
         </button>
         <Avatar className="w-12 h-12 border-2 border-white shadow-sm">
@@ -108,7 +113,13 @@ export default function ChatRoom({
             </span>
           </div>
         </div>
-        <Button onClick={getIcebreakers} variant="ghost" size="icon" className="h-11 w-11 rounded-xl text-brand-coral hover:bg-brand-blush">
+        <Button
+          aria-label="Generate conversation starters"
+          onClick={getIcebreakers}
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11 rounded-xl text-brand-coral hover:bg-brand-blush"
+        >
             <Sparkles className="w-6 h-6" />
         </Button>
       </header>
@@ -122,6 +133,7 @@ export default function ChatRoom({
                 </div>
                 {icebreakers.map((ib, i) => (
                     <button 
+                        type="button"
                         key={i} 
                         onClick={() => handleSend(ib)}
                         className="group flex w-full items-center justify-between rounded-xl bg-white p-4 text-left text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-amber-100"
@@ -145,7 +157,9 @@ export default function ChatRoom({
                     {msg.text}
                     {!isMe && (
                       <button 
+                        type="button"
                         onClick={() => handleTranslate(msg.id, msg.text)}
+                        aria-label={`Translate message to ${translationTarget}`}
                         className="absolute -right-10 bottom-2 flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-brand-coral opacity-0 shadow-sm transition-all hover:bg-brand-coral hover:text-white group-hover:opacity-100"
                       >
                         <Languages className="w-4 h-4" />
@@ -175,6 +189,7 @@ export default function ChatRoom({
           className="h-12 rounded-xl border-none bg-muted px-4 text-base font-medium focus-visible:ring-brand-coral/30"
         />
         <Button 
+          aria-label="Send message"
           onClick={() => handleSend()} 
           disabled={sending || !newMessage.trim()}
           className="h-12 w-12 flex-shrink-0 rounded-xl bg-brand-coral p-0 shadow-sm transition-all hover:bg-brand-coral/90"

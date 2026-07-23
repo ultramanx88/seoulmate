@@ -277,6 +277,13 @@
     white-space: nowrap;
   }
 
+  .locale-chip:focus-visible,
+  .bottom-bar button:focus-visible,
+  .top-bar button:focus-visible {
+    outline: 3px solid color-mix(in oklch, var(--ring), white 30%);
+    outline-offset: 3px;
+  }
+
   .intent-chip {
     border-color: color-mix(in oklch, var(--brand-ink), white 68%);
     background: color-mix(in oklch, var(--brand-ink), white 88%);

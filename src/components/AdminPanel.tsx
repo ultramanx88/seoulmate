@@ -83,6 +83,7 @@ export default function AdminPanel() {
   const [moderationReason, setModerationReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId) ?? null,
@@ -131,43 +132,71 @@ export default function AdminPanel() {
   };
 
   const logout = async () => {
-    await apiRequest('/v1/admin/auth/logout', { method: 'POST' });
-    setAdmin(null);
+    setActionBusy('logout');
+    try {
+      await apiRequest('/v1/admin/auth/logout', { method: 'POST' });
+      setAdmin(null);
+    } catch {
+      toast.error('Logout failed');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const setReportStatus = async (report: Report, status: 'reviewing' | 'resolved' | 'dismissed') => {
-    await apiRequest(`/v1/admin/reports/${report.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, resolution: status === 'reviewing' ? undefined : 'Reviewed by admin' }),
-    });
-    toast.success('Report updated');
-    await loadConsole();
+    setActionBusy(`report:${report.id}:${status}`);
+    try {
+      await apiRequest(`/v1/admin/reports/${report.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, resolution: status === 'reviewing' ? undefined : 'Reviewed by admin' }),
+      });
+      toast.success('Report updated');
+      await loadConsole();
+    } catch {
+      toast.error('Could not update report');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const setUserStatus = async (status: 'active' | 'suspended' | 'banned') => {
     if (!selectedUser) return;
-    await apiRequest(`/v1/admin/users/${selectedUser.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, reason: moderationReason || undefined }),
-    });
-    toast.success('User status updated');
-    setModerationReason('');
-    await loadConsole();
+    setActionBusy(`user-status:${status}`);
+    try {
+      await apiRequest(`/v1/admin/users/${selectedUser.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason: moderationReason || undefined }),
+      });
+      toast.success('User status updated');
+      setModerationReason('');
+      await loadConsole();
+    } catch {
+      toast.error('Could not update user status');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const setUserPlan = async (plan: 'free' | 'pro') => {
     if (!selectedUser) return;
-    await apiRequest(`/v1/admin/users/${selectedUser.id}/plan`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        plan,
-        months: plan === 'pro' ? 1 : undefined,
-        reason: moderationReason || undefined,
-      }),
-    });
-    toast.success(plan === 'pro' ? 'Pro granted' : 'Plan set to Free');
-    setModerationReason('');
-    await loadConsole();
+    setActionBusy(`user-plan:${plan}`);
+    try {
+      await apiRequest(`/v1/admin/users/${selectedUser.id}/plan`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          plan,
+          months: plan === 'pro' ? 1 : undefined,
+          reason: moderationReason || undefined,
+        }),
+      });
+      toast.success(plan === 'pro' ? 'Pro granted' : 'Plan set to Free');
+      setModerationReason('');
+      await loadConsole();
+    } catch {
+      toast.error('Could not update plan');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   if (loading) {
@@ -231,8 +260,8 @@ export default function AdminPanel() {
               <p className="text-sm font-medium text-muted-foreground">{admin.email} · {admin.role}</p>
             </div>
           </div>
-          <Button variant="outline" className="rounded-xl" onClick={logout}>
-            <LogOut className="mr-2 size-4" /> Logout
+          <Button variant="outline" className="rounded-xl" disabled={actionBusy === 'logout'} onClick={logout}>
+            <LogOut className="mr-2 size-4" /> {actionBusy === 'logout' ? 'Logging out...' : 'Logout'}
           </Button>
         </header>
 
@@ -288,10 +317,10 @@ export default function AdminPanel() {
                     <p className="mt-3 text-sm font-semibold text-brand-ink">{report.reason}</p>
                     {report.detail && <p className="mt-1 text-sm leading-6 text-muted-foreground">{report.detail}</p>}
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setReportStatus(report, 'reviewing')}>Review</Button>
-                      <Button size="sm" variant="outline" onClick={() => setReportStatus(report, 'dismissed')}>Dismiss</Button>
-                      <Button size="sm" className="bg-brand-ink text-white hover:bg-brand-ink/90" onClick={() => setReportStatus(report, 'resolved')}>
-                        <CheckCircle2 className="mr-1 size-4" /> Resolve
+                      <Button size="sm" variant="outline" disabled={!!actionBusy} onClick={() => setReportStatus(report, 'reviewing')}>Review</Button>
+                      <Button size="sm" variant="outline" disabled={!!actionBusy} onClick={() => setReportStatus(report, 'dismissed')}>Dismiss</Button>
+                      <Button size="sm" className="bg-brand-ink text-white hover:bg-brand-ink/90" disabled={!!actionBusy} onClick={() => setReportStatus(report, 'resolved')}>
+                        <CheckCircle2 className="mr-1 size-4" /> {actionBusy === `report:${report.id}:resolved` ? 'Resolving...' : 'Resolve'}
                       </Button>
                     </div>
                   </div>
@@ -314,6 +343,7 @@ export default function AdminPanel() {
                     key={user.id}
                     type="button"
                     onClick={() => setSelectedUserId(user.id)}
+                    aria-pressed={selectedUserId === user.id}
                     className={`w-full rounded-2xl border p-3 text-left transition-all ${
                       selectedUserId === user.id ? 'border-brand-coral bg-brand-blush' : 'border-border bg-white hover:border-brand-coral/30'
                     }`}
@@ -346,15 +376,15 @@ export default function AdminPanel() {
                     className="min-h-20 rounded-xl bg-white"
                   />
                   <div className="mt-3 grid grid-cols-3 gap-2">
-                    <Button variant="outline" className="rounded-xl" onClick={() => setUserStatus('active')}>Active</Button>
-                    <Button variant="outline" className="rounded-xl" onClick={() => setUserStatus('suspended')}>Suspend</Button>
-                    <Button variant="destructive" className="rounded-xl" onClick={() => setUserStatus('banned')}>
+                    <Button variant="outline" className="rounded-xl" disabled={!!actionBusy} onClick={() => setUserStatus('active')}>Active</Button>
+                    <Button variant="outline" className="rounded-xl" disabled={!!actionBusy} onClick={() => setUserStatus('suspended')}>Suspend</Button>
+                    <Button variant="destructive" className="rounded-xl" disabled={!!actionBusy} onClick={() => setUserStatus('banned')}>
                       <AlertTriangle className="mr-1 size-4" /> Ban
                     </Button>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Button variant="outline" className="rounded-xl" onClick={() => setUserPlan('free')}>Set Free</Button>
-                    <Button className="rounded-xl bg-brand-ink text-white hover:bg-brand-ink/90" onClick={() => setUserPlan('pro')}>
+                    <Button variant="outline" className="rounded-xl" disabled={!!actionBusy} onClick={() => setUserPlan('free')}>Set Free</Button>
+                    <Button className="rounded-xl bg-brand-ink text-white hover:bg-brand-ink/90" disabled={!!actionBusy} onClick={() => setUserPlan('pro')}>
                       Grant Pro
                     </Button>
                   </div>

@@ -47,7 +47,9 @@ export default function ChatList({ translationTarget }: { translationTarget: 'TH
       {chats.map((chat) => (
         <button 
           key={chat.id}
+          type="button"
           onClick={() => setSelectedChatId(chat.id)}
+          aria-label={`Open conversation with ${chat.otherUser?.displayName ?? 'connection'}`}
           className="group flex w-full items-center gap-4 rounded-2xl border border-border bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-coral/25 hover:shadow-md"
         >
           <div className="relative">

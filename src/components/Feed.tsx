@@ -23,6 +23,8 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
   const [isMatching, setIsMatching] = useState(false);
   const [selectedPostForMatch, setSelectedPostForMatch] = useState<any | null>(null);
   const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
+  const [reportTarget, setReportTarget] = useState<any | null>(null);
+  const [reportReason, setReportReason] = useState('');
   const [translations, setTranslations] = useState<Record<string, { text: string; lang: string }>>({});
   const [isTranslating, setIsTranslating] = useState<string | null>(null);
   
@@ -125,19 +127,25 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
   };
 
   const reportPost = async (post: any) => {
-    const reason = window.prompt('What should safety review?');
-    if (!reason?.trim()) return;
+    setReportTarget(post);
+    setReportReason('');
+  };
+
+  const submitPostReport = async () => {
+    if (!reportTarget || !reportReason.trim()) return;
     try {
       await apiRequest('/v1/reports', {
         method: 'POST',
         body: JSON.stringify({
           targetType: 'topic',
-          targetId: post.id,
-          reportedUserId: post.authorId,
-          reason,
+          targetId: reportTarget.id,
+          reportedUserId: reportTarget.authorId,
+          reason: reportReason.trim(),
         }),
       });
       toast.success('Report sent to safety review');
+      setReportTarget(null);
+      setReportReason('');
     } catch {
       toast.error('Could not submit report');
     }
@@ -171,13 +179,19 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
     setInvitingUserId(user.id);
     try {
       const invitation = await geminiService.generateInvitation(post, user);
-      // Simulate sending a "connected" notification/message
-      toast.success(`Invitation sent to ${user.displayName}!`, {
-        description: `"${invitation}"`,
-        duration: 5000,
+      const chatResult = await apiRequest<{ chat: any }>('/v1/chats', {
+        method: 'POST',
+        body: JSON.stringify({ userId: user.id }),
       });
+      await apiRequest(`/v1/chats/${chatResult.chat.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ text: invitation }),
+      });
+      toast.success(`Invitation sent to ${user.displayName}`);
     } catch (e) {
-      toast.error("Failed to generate invitation");
+      toast.error(e instanceof Error && e.message === 'USAGE_LIMIT_REACHED'
+        ? 'Daily new chat limit reached. Pro will raise this limit.'
+        : 'Failed to send invitation');
     } finally {
       setInvitingUserId(null);
     }
@@ -423,7 +437,9 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
 
               <div className="flex items-center gap-5 border-t border-border pt-5">
                 <button 
+                    type="button"
                     onClick={() => handleLike(post.id)}
+                    aria-label={`Like ${post.title || 'topic'}`}
                     className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-coral group/btn"
                 >
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-blush">
@@ -432,8 +448,10 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                     <span className="text-xs font-bold">{post.likesCount || 0}</span>
                 </button>
                 <button 
+                    type="button"
                     onClick={() => handleTranslate(post.id, post.content)}
                     disabled={isTranslating === post.id}
+                    aria-label={`Translate ${post.title || 'topic'} to ${translationTarget}`}
                     className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-ink group/btn"
                 >
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-lilac">
@@ -446,7 +464,9 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                     <span className="text-xs font-bold">Translate</span>
                 </button>
                 <button 
+                    type="button"
                     onClick={() => openComments(post)}
+                    aria-label={`Open discussion for ${post.title || 'topic'}`}
                     className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-ink group/btn"
                 >
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-lilac">
@@ -455,7 +475,9 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                     <span className="text-xs font-bold">{post.commentsCount || 0}</span>
                 </button>
                 <button 
+                    type="button"
                     onClick={() => reportPost(post)}
+                    aria-label={`Report ${post.title || 'topic'}`}
                     className="flex items-center gap-2 text-muted-foreground transition-all hover:text-brand-coral group/btn"
                 >
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted transition-colors group-hover/btn:bg-brand-blush">
@@ -464,7 +486,9 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                     <span className="text-xs font-bold">Report</span>
                 </button>
                 <button 
+                  type="button"
                   onClick={() => showMatchRecommendations(post)}
+                  aria-label={`Find match suggestions for ${post.title || 'topic'}`}
                   className="ml-auto flex items-center gap-2 text-brand-coral transition-all hover:text-brand-ink group/btn"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-blush text-[10px] font-extrabold transition-colors group-hover/btn:bg-brand-lilac">
@@ -636,6 +660,7 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                 <div className="flex flex-wrap gap-2">
                     {replySuggestions.map((s, i) => (
                         <button 
+                            type="button"
                             key={i}
                             onClick={() => setNewComment(s.text)}
                             className="rounded-full border border-brand-coral/15 bg-brand-blush px-3 py-1.5 text-xs font-bold text-brand-coral transition-all hover:bg-brand-coral hover:text-white active:scale-95"
@@ -660,6 +685,7 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                     className="min-h-12 resize-none rounded-xl border-none bg-muted px-4 py-3 font-medium focus-visible:ring-brand-coral/30"
                 />
                 <Button 
+                    aria-label="Send discussion reply"
                     onClick={handlePostComment}
                     disabled={sendingComment || !newComment.trim()}
                     className="h-12 w-12 flex-shrink-0 rounded-xl bg-brand-coral p-0 shadow-sm"
@@ -672,6 +698,31 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                 </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reportTarget} onOpenChange={(open) => !open && setReportTarget(null)}>
+        <DialogContent className="rounded-2xl border-border bg-white shadow-[0_24px_70px_oklch(0.25_0.07_282/16%)]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold text-brand-ink">Report discussion</DialogTitle>
+            <DialogDescription className="leading-6">
+              Tell safety what should be reviewed. Reports are private and help keep real chat trustworthy.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={reportReason}
+            onChange={(event) => setReportReason(event.target.value)}
+            placeholder="Spam, scam, harassment, unsafe content, or another concern..."
+            className="min-h-28 rounded-xl bg-muted/60"
+          />
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="h-11 rounded-xl" onClick={() => setReportTarget(null)}>
+              Cancel
+            </Button>
+            <Button className="action-primary h-11 rounded-xl font-extrabold" disabled={!reportReason.trim()} onClick={submitPostReport}>
+              Send report
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
