@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { UserButton } from '@clerk/clerk-react';
-import { Crown, Heart, MessageCircle, Globe, Settings as SettingsIcon } from 'lucide-react';
+import { Crown, Heart, MessageCircle, Globe, Settings as SettingsIcon, Download, X } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 
@@ -13,6 +13,10 @@ const ChatList = lazy(() => import('./components/ChatList'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const ProPanel = lazy(() => import('./components/ProPanel'));
 type TranslationTarget = 'TH' | 'KR';
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
 
 function AppLoading() {
   return (
@@ -57,6 +61,92 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
         </button>
       ))}
     </nav>
+  );
+}
+
+function PwaInstallCard() {
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    const ios = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    const dismissedAt = Number(window.localStorage.getItem('seoulmate.pwaInstallDismissedAt') ?? 0);
+    const dismissedRecently = dismissedAt > 0 && Date.now() - dismissedAt < 1000 * 60 * 60 * 24 * 14;
+    setIsStandalone(standalone);
+    setIsIos(ios);
+
+    if (!standalone && ios && !dismissedRecently) {
+      const timer = window.setTimeout(() => setVisible(true), 1600);
+      return () => window.clearTimeout(timer);
+    }
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      if (dismissedRecently) return;
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+      setVisible(true);
+    };
+
+    const handleInstalled = () => {
+      setVisible(false);
+      setInstallPrompt(null);
+      setIsStandalone(true);
+      toast.success('Seoulmate added to your home screen');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
+  const dismiss = () => {
+    window.localStorage.setItem('seoulmate.pwaInstallDismissedAt', String(Date.now()));
+    setVisible(false);
+  };
+
+  const install = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    setVisible(false);
+    if (choice.outcome === 'accepted') {
+      toast.success('Opening Seoulmate from your home screen will feel more app-like');
+    }
+  };
+
+  if (!visible || isStandalone) return null;
+
+  return (
+    <section className="pwa-install-card" aria-label="Install Seoulmate app">
+      <div className="pwa-install-icon" aria-hidden="true">
+        <img src="/brand/seoulmate-mark.svg" alt="" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-black leading-tight text-brand-ink">Install Seoulmate</p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+          {isIos
+            ? 'Use Share, then Add to Home Screen for the app-style launch.'
+            : 'Add it to your home screen for splash launch and faster access.'}
+        </p>
+      </div>
+      {installPrompt && (
+        <button type="button" className="pwa-install-action" onClick={install}>
+          <Download className="size-4" />
+          Install
+        </button>
+      )}
+      <button type="button" className="pwa-install-close" onClick={dismiss} aria-label="Dismiss install prompt">
+        <X className="size-4" />
+      </button>
+    </section>
   );
 }
 
@@ -126,6 +216,7 @@ function MainApp() {
         {activeTab === 'profile' && <ProfileSetup existingProfile={profile} />}
       </main>
 
+      <PwaInstallCard />
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
       <Toaster />
     </div>
