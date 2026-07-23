@@ -158,6 +158,8 @@
   html {
     @apply font-sans;
     background: var(--background);
+    min-height: 100%;
+    overscroll-behavior: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -167,7 +169,13 @@
     @apply bg-background text-foreground;
     min-width: 320px;
     min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
     font-feature-settings: "kern", "liga";
+  }
+
+  #root {
+    min-height: 100dvh;
   }
 
   h1,
@@ -271,10 +279,10 @@
   }
 
   .app-shell {
-    min-height: 100vh;
+    min-height: 100dvh;
     background:
       linear-gradient(180deg, oklch(0.995 0.006 73), var(--background) 46%, oklch(0.972 0.014 286));
-    padding-bottom: var(--bottom-nav-height);
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
   }
 
   .mobile-frame {
@@ -288,6 +296,14 @@
     border-color: var(--border);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+  }
+
+  .top-bar {
+    min-height: calc(4.5rem + env(safe-area-inset-top));
+  }
+
+  .bottom-bar {
+    min-height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
   }
 
   .pwa-install-card {

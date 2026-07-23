@@ -45,7 +45,7 @@ function Navigation({ activeTab, setActiveTab }: { activeTab: string, setActiveT
   ];
 
   return (
-    <nav className="bottom-bar fixed bottom-0 left-0 right-0 border-t px-3 py-4 flex items-center z-50">
+    <nav className="bottom-bar fixed inset-x-0 bottom-0 z-50 flex items-center border-t px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -182,7 +182,7 @@ function MainApp() {
 
   return (
     <div className="app-shell">
-      <header className="top-bar sticky top-0 z-40 border-b px-4 py-4 flex items-center justify-between">
+      <header className="top-bar sticky top-0 z-40 flex items-center justify-between border-b px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="flex items-center gap-2">
           <div className="brand-mark flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold text-white">S</div>
           <h1 className="brand-wordmark text-xl">SEOUL<span className="brand-wordmark-accent">MATE</span></h1>
