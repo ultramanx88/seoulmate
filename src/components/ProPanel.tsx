@@ -1,5 +1,5 @@
 import { createElement, useEffect, useState } from 'react';
-import { CheckCircle2, Crown, Filter, Languages, LockKeyhole, Map, ShieldCheck, Sparkles } from 'lucide-react';
+import { CheckCircle2, Crown, Filter, Images, Languages, LockKeyhole, Map, ShieldCheck, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
@@ -22,6 +22,7 @@ type EntitlementPayload = {
 const proFeatures = [
   { icon: Filter, title: 'Advanced filters', detail: 'Filter by intent, language, active status, and city.' },
   { icon: Languages, title: 'More AI translation', detail: 'Higher allowance for Thai/Korean nuance and replies.' },
+  { icon: Images, title: 'Custom AI sticker packs', detail: 'Save your own generated stickers and unlock them while Pro is active.' },
   { icon: LockKeyhole, title: 'Private mode', detail: 'Control who can discover you as the network grows.' },
   { icon: Map, title: 'Travel mode', detail: 'Prepare connections around Seoul, Bangkok, Chiang Mai, and Busan.' },
   { icon: Sparkles, title: 'Profile review', detail: 'Monthly AI profile polish focused on trust, not hype.' },

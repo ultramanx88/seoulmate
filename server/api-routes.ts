@@ -28,6 +28,24 @@ import {
 const adminSessionCookieName = 'seoulmate_admin_session';
 const adminSessionTtlSeconds = 60 * 60 * 12;
 const scrypt = promisify(scryptCallback);
+const basicStickerIds = new Set([
+  'basic-hello',
+  'basic-smile',
+  'basic-thanks',
+  'basic-sorry',
+  'basic-heart',
+  'basic-shy',
+  'basic-laugh',
+  'basic-cheer',
+  'basic-coffee',
+  'basic-food',
+  'basic-walk',
+  'basic-movie',
+  'basic-wait',
+  'basic-safe',
+  'basic-miss',
+  'basic-goodnight',
+]);
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -992,7 +1010,7 @@ export function createApiRouter(): Router {
     }
     const result = await database.query(
       `
-        SELECT id, sender_id, text, translations, created_at
+        SELECT id, sender_id, text, translations, message_type, sticker_id, metadata, created_at
         FROM messages
         WHERE chat_id = $1
           AND moderation_status = 'visible'
@@ -1006,6 +1024,9 @@ export function createApiRouter(): Router {
         senderId: row.sender_id,
         text: row.text,
         translations: row.translations,
+        messageType: row.message_type ?? 'text',
+        stickerId: row.sticker_id,
+        metadata: row.metadata ?? {},
         createdAt: dateJson(row.created_at),
       })),
     });
@@ -1014,11 +1035,21 @@ export function createApiRouter(): Router {
   router.post('/v1/chats/:chatId/messages', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
-    const body = request.body as { text?: string };
-    if (!body.text?.trim()) {
+    const body = request.body as { text?: string; stickerId?: string };
+    const stickerId = body.stickerId?.trim();
+    const isSticker = Boolean(stickerId);
+    const text = body.text?.trim() ?? '';
+    if (isSticker && (!stickerId || !basicStickerIds.has(stickerId))) {
+      response.status(400).json({ error: 'STICKER_NOT_FOUND' });
+      return;
+    }
+    if (!isSticker && !text) {
       response.status(400).json({ error: 'TEXT_REQUIRED' });
       return;
     }
+    const messageText = isSticker ? (text || 'Sticker') : text;
+    const messageType = isSticker ? 'sticker' : 'text';
+    const lastMessage = isSticker ? 'Sent a sticker' : messageText;
     const access = await database.query(
       'SELECT 1 FROM chat_participants WHERE chat_id = $1 AND user_id = $2',
       [request.params.chatId, user.id],
@@ -1040,12 +1071,16 @@ export function createApiRouter(): Router {
     try {
       await client.query('BEGIN');
       const inserted = await client.query(
-        'INSERT INTO messages (id, chat_id, sender_id, text) VALUES ($1, $2, $3, $4) RETURNING *',
-        [id, request.params.chatId, user.id, body.text],
+        `
+          INSERT INTO messages (id, chat_id, sender_id, text, message_type, sticker_id, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+          RETURNING *
+        `,
+        [id, request.params.chatId, user.id, messageText, messageType, stickerId ?? null, '{}'],
       );
       await client.query(
         'UPDATE chats SET last_message = $2, last_message_at = now() WHERE id = $1',
-        [request.params.chatId, body.text],
+        [request.params.chatId, lastMessage],
       );
       await client.query('COMMIT');
       response.status(201).json({
@@ -1054,6 +1089,9 @@ export function createApiRouter(): Router {
           senderId: inserted.rows[0].sender_id,
           text: inserted.rows[0].text,
           translations: inserted.rows[0].translations,
+          messageType: inserted.rows[0].message_type ?? 'text',
+          stickerId: inserted.rows[0].sticker_id,
+          metadata: inserted.rows[0].metadata ?? {},
           createdAt: dateJson(inserted.rows[0].created_at),
         },
       });
