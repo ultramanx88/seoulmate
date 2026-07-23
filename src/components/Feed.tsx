@@ -262,7 +262,7 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
     setSelectedPostForComments(post);
     setComments([]);
     setNewComment('');
-    setDiscussionStickerTrayOpen(false);
+    setDiscussionStickerTrayOpen(canUseDiscussionStickers);
     setReplySuggestions([]);
 
     await fetchDiscussion(post, { scroll: true });
@@ -730,12 +730,37 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
           </div>
 
           <div className="space-y-4 border-t border-border bg-white p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 p-3">
+              <button
+                type="button"
+                onClick={() => setDiscussionStickerTrayOpen((open) => !open)}
+                aria-expanded={discussionStickerTrayOpen}
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-extrabold transition active:scale-95 ${
+                  discussionStickerTrayOpen
+                    ? 'border-brand-coral/30 bg-brand-blush text-brand-coral'
+                    : 'border-border bg-white text-brand-ink hover:border-brand-coral/25 hover:text-brand-coral'
+                }`}
+              >
+                {canUseDiscussionStickers ? <SmilePlus className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+                Stickers
+              </button>
+              <p className="min-w-0 flex-1 text-xs font-semibold leading-5 text-muted-foreground">
+                {canUseDiscussionStickers
+                  ? 'Pro reactions are ready for this topic.'
+                  : 'Pro members can send stickers in topic replies.'}
+              </p>
+            </div>
+
             {discussionStickerTrayOpen && (
               <div className="rounded-2xl border border-border bg-muted/35 p-3 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-extrabold text-brand-ink">Pro discussion stickers</p>
-                    <p className="text-xs font-semibold text-muted-foreground">Send reactions into topic replies.</p>
+                    <p className="text-sm font-extrabold text-brand-ink">
+                      {canUseDiscussionStickers ? 'Pro discussion stickers' : 'Pro stickers preview'}
+                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {canUseDiscussionStickers ? 'Send reactions into topic replies.' : 'Upgrade to send these in discussions.'}
+                    </p>
                   </div>
                   <div className="inline-flex rounded-xl border border-border bg-white p-1">
                     {(['TH', 'KR'] as const).map((locale) => (
@@ -796,15 +821,11 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                 <Button
                     aria-label={discussionStickerTrayOpen ? 'Close discussion stickers' : 'Open discussion stickers'}
                     aria-pressed={discussionStickerTrayOpen}
-                    onClick={() => {
-                      if (!canUseDiscussionStickers) {
-                        toast.error('Discussion stickers are a Pro feature');
-                        return;
-                      }
-                      setDiscussionStickerTrayOpen((open) => !open);
-                    }}
+                    onClick={() => setDiscussionStickerTrayOpen((open) => !open)}
                     variant="outline"
-                    className={`h-12 w-12 flex-shrink-0 rounded-xl p-0 ${canUseDiscussionStickers ? 'text-brand-coral' : 'text-muted-foreground'}`}
+                    className={`h-12 w-12 flex-shrink-0 rounded-xl p-0 ${
+                      discussionStickerTrayOpen ? 'border-brand-coral/30 bg-brand-blush text-brand-coral' : canUseDiscussionStickers ? 'text-brand-coral' : 'text-muted-foreground'
+                    }`}
                     title={canUseDiscussionStickers ? 'Pro stickers' : 'Pro stickers only'}
                 >
                     {canUseDiscussionStickers ? <SmilePlus className="w-5 h-5" /> : <LockKeyhole className="w-5 h-5" />}
