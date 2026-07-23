@@ -707,14 +707,30 @@ export function createApiRouter(): Router {
   router.get('/v1/topics/:topicId/comments', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
+    const topic = await database.query(
+      `
+        SELECT id, comments_count
+        FROM topics
+        WHERE id = $1
+          AND moderation_status = 'visible'
+        LIMIT 1
+      `,
+      [request.params.topicId],
+    );
+    if (!topic.rowCount) {
+      response.status(404).json({ error: 'TOPIC_NOT_FOUND' });
+      return;
+    }
     const result = await database.query(
       `
         SELECT
           c.id,
+          c.author_id,
           c.text,
           c.created_at,
           u.display_name AS author_name,
-          u.photo_url AS author_photo
+          u.photo_url AS author_photo,
+          u.nationality AS author_nationality
         FROM comments c
         JOIN users u ON u.id = c.author_id
         WHERE c.topic_id = $1
@@ -727,11 +743,14 @@ export function createApiRouter(): Router {
     response.json({
       comments: result.rows.map((row) => ({
         id: row.id,
+        authorId: row.author_id,
         text: row.text,
         createdAt: dateJson(row.created_at),
         authorName: row.author_name,
         authorPhoto: row.author_photo,
+        authorNationality: row.author_nationality,
       })),
+      commentsCount: topic.rows[0]?.comments_count ?? result.rowCount,
     });
   });
 
@@ -739,31 +758,54 @@ export function createApiRouter(): Router {
     const user = await requireUser(request, response);
     if (!user) return;
     const body = request.body as { text?: string };
-    if (!body.text?.trim()) {
+    const text = body.text?.trim() ?? '';
+    if (!text) {
       response.status(400).json({ error: 'TEXT_REQUIRED' });
+      return;
+    }
+    if (text.length > 2000) {
+      response.status(400).json({ error: 'TEXT_TOO_LONG' });
       return;
     }
     const id = randomUUID();
     const client = await database.connect();
     try {
       await client.query('BEGIN');
+      const topic = await client.query(
+        `
+          SELECT id
+          FROM topics
+          WHERE id = $1
+            AND moderation_status = 'visible'
+          FOR UPDATE
+        `,
+        [request.params.topicId],
+      );
+      if (!topic.rowCount) {
+        await client.query('ROLLBACK');
+        response.status(404).json({ error: 'TOPIC_NOT_FOUND' });
+        return;
+      }
       const inserted = await client.query(
         'INSERT INTO comments (id, topic_id, author_id, text) VALUES ($1, $2, $3, $4) RETURNING *',
-        [id, request.params.topicId, user.id, body.text],
+        [id, request.params.topicId, user.id, text],
       );
-      await client.query(
-        'UPDATE topics SET comments_count = comments_count + 1 WHERE id = $1',
+      const topicUpdate = await client.query(
+        'UPDATE topics SET comments_count = comments_count + 1 WHERE id = $1 RETURNING comments_count',
         [request.params.topicId],
       );
       await client.query('COMMIT');
       response.status(201).json({
         comment: {
           id: inserted.rows[0].id,
+          authorId: user.id,
           text: inserted.rows[0].text,
           createdAt: dateJson(inserted.rows[0].created_at),
           authorName: user.display_name,
           authorPhoto: user.photo_url,
+          authorNationality: user.nationality,
         },
+        commentsCount: topicUpdate.rows[0]?.comments_count ?? null,
       });
     } catch (error) {
       await client.query('ROLLBACK');

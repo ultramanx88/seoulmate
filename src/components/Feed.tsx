@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { apiRequest, parseApiDate } from '../lib/api';
 import { Button } from './ui/button';
@@ -29,8 +29,11 @@ export default function Feed() {
   const [selectedPostForComments, setSelectedPostForComments] = useState<any | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [sendingComment, setSendingComment] = useState(false);
   const [replySuggestions, setReplySuggestions] = useState<{ style: string; text: string }[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const discussionBottomRef = useRef<HTMLDivElement>(null);
 
   const fetchRankedFeed = async () => {
     setLoading(true);
@@ -207,18 +210,39 @@ export default function Feed() {
     }
   };
 
+  const fetchDiscussion = async (post: any, options: { silent?: boolean; scroll?: boolean } = {}) => {
+    if (!options.silent) setLoadingComments(true);
+    try {
+      const result = await apiRequest<{ comments: any[]; commentsCount?: number }>(`/v1/topics/${post.id}/comments`);
+      setComments(result.comments);
+      if (typeof result.commentsCount === 'number') {
+        setPosts((previous) =>
+          previous.map((item) =>
+            item.id === post.id ? { ...item, commentsCount: result.commentsCount } : item
+          )
+        );
+        setSelectedPostForComments((current: any | null) =>
+          current?.id === post.id ? { ...current, commentsCount: result.commentsCount } : current
+        );
+      }
+      if (options.scroll) {
+        setTimeout(() => discussionBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
+      }
+    } catch (error) {
+      console.error(error);
+      if (!options.silent) toast.error("Failed to load discussion");
+    } finally {
+      if (!options.silent) setLoadingComments(false);
+    }
+  };
+
   const openComments = async (post: any) => {
     setSelectedPostForComments(post);
+    setComments([]);
     setNewComment('');
     setReplySuggestions([]);
 
-    try {
-      const result = await apiRequest<{ comments: any[] }>(`/v1/topics/${post.id}/comments`);
-      setComments(result.comments);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load comments");
-    }
+    await fetchDiscussion(post, { scroll: true });
 
     // AI Suggestions
     setLoadingSuggestions(true);
@@ -232,26 +256,43 @@ export default function Feed() {
     }
   };
 
+  useEffect(() => {
+    if (!selectedPostForComments) return;
+    const timer = window.setInterval(() => {
+      fetchDiscussion(selectedPostForComments, { silent: true }).catch(console.error);
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [selectedPostForComments?.id]);
+
   const handlePostComment = async () => {
     if (!newComment.trim() || !selectedPostForComments) return;
-    
+    const text = newComment.trim();
+    setSendingComment(true);
     try {
-        const result = await apiRequest<{ comment: any }>(`/v1/topics/${selectedPostForComments.id}/comments`, {
+        const result = await apiRequest<{ comment: any; commentsCount?: number }>(`/v1/topics/${selectedPostForComments.id}/comments`, {
           method: 'POST',
-          body: JSON.stringify({ text: newComment }),
+          body: JSON.stringify({ text }),
         });
         setComments((previous) => [...previous, result.comment]);
         setPosts((previous) =>
           previous.map((post) =>
             post.id === selectedPostForComments.id
-              ? { ...post, commentsCount: (post.commentsCount || 0) + 1 }
+              ? { ...post, commentsCount: result.commentsCount ?? (post.commentsCount || 0) + 1 }
               : post
           )
         );
+        setSelectedPostForComments((current: any | null) =>
+          current ? { ...current, commentsCount: result.commentsCount ?? (current.commentsCount || 0) + 1 } : current
+        );
         setNewComment('');
-        toast.success("Comment posted");
+        setTimeout(() => discussionBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
     } catch (e) {
-        toast.error("Failed to post comment");
+        toast.error(e instanceof Error && e.message === 'TEXT_TOO_LONG'
+          ? 'Message is too long for this discussion.'
+          : 'Failed to post reply');
+    } finally {
+        setSendingComment(false);
     }
   };
 
@@ -505,32 +546,86 @@ export default function Feed() {
       </Dialog>
 
       <Dialog open={!!selectedPostForComments} onOpenChange={() => setSelectedPostForComments(null)}>
-        <DialogContent className="mx-auto flex h-[80vh] max-w-sm flex-col overflow-hidden rounded-2xl border-border bg-white p-0">
-          <DialogHeader className="border-b border-border bg-white p-6">
-            <DialogTitle className="text-xl font-extrabold text-brand-ink">Comments</DialogTitle>
+        <DialogContent className="mx-auto flex h-[84vh] max-w-2xl flex-col overflow-hidden rounded-2xl border-border bg-white p-0">
+          <DialogHeader className="border-b border-border bg-white p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10 border border-white shadow-sm">
+                <AvatarImage src={selectedPostForComments?.authorPhoto} />
+                <AvatarFallback>{selectedPostForComments?.authorName?.[0]}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="line-clamp-2 text-lg font-extrabold leading-tight text-brand-ink sm:text-xl">
+                  {selectedPostForComments?.title || 'Discussion'}
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+                  Started by {selectedPostForComments?.authorName} · {selectedPostForComments?.commentsCount || 0} replies · live discussion
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3">
-                    <Avatar className="w-8 h-8 border border-white shadow-sm flex-shrink-0">
-                        <AvatarImage src={comment.authorPhoto} />
-                        <AvatarFallback>{comment.authorName?.[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="space-y-1">
-                        <div className="text-xs font-bold text-brand-ink/60">{comment.authorName}</div>
-                        <div className="rounded-2xl rounded-tl-sm border border-border bg-white p-4 text-sm font-medium leading-relaxed text-foreground shadow-sm">
-                            {comment.text}
-                        </div>
-                    </div>
-                </div>
-            ))}
-            {comments.length === 0 && (
-                <div className="py-12 text-center text-sm font-semibold text-muted-foreground">No comments yet.</div>
+          {selectedPostForComments && (
+            <div className="border-b border-border bg-muted/40 px-5 py-4 sm:px-6">
+              <p className="line-clamp-3 text-sm font-semibold leading-6 text-foreground">
+                {selectedPostForComments.content}
+              </p>
+            </div>
+          )}
+
+          <div className="flex-1 space-y-5 overflow-y-auto bg-muted/30 p-5 sm:p-6">
+            {loadingComments && (
+              <div className="py-10 text-center text-sm font-semibold text-muted-foreground">
+                Loading discussion...
+              </div>
             )}
+
+            {!loadingComments && comments.map((comment) => {
+              const isMe = comment.authorId === profile?.uid;
+              const createdAt = parseApiDate(comment.createdAt);
+
+              return (
+                <div key={comment.id} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  {!isMe && (
+                    <Avatar className="h-9 w-9 flex-shrink-0 border border-white shadow-sm">
+                      <AvatarImage src={comment.authorPhoto} />
+                      <AvatarFallback>{comment.authorName?.[0]}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={`max-w-[82%] space-y-1 ${isMe ? 'items-end text-right' : ''}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold text-brand-ink/55 ${isMe ? 'justify-end' : ''}`}>
+                      <span>{isMe ? 'You' : comment.authorName}</span>
+                      {comment.authorNationality && (
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-brand-ink/55">
+                          {comment.authorNationality}
+                        </span>
+                      )}
+                      {createdAt && (
+                        <span className="font-semibold text-muted-foreground">
+                          {formatDistanceToNow(createdAt)} ago
+                        </span>
+                      )}
+                    </div>
+                    <div className={`rounded-2xl p-4 text-sm font-medium leading-6 shadow-sm ${
+                      isMe
+                        ? 'rounded-tr-sm bg-brand-ink text-white'
+                        : 'rounded-tl-sm border border-border bg-white text-foreground'
+                    }`}>
+                      {comment.text}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!loadingComments && comments.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-border bg-white p-8 text-center text-sm font-semibold leading-6 text-muted-foreground">
+                  No replies yet. Start the discussion with a real question, a useful detail, or a kind first hello.
+                </div>
+            )}
+            <div ref={discussionBottomRef} />
           </div>
 
-          <div className="space-y-4 border-t border-border bg-white p-6">
+          <div className="space-y-4 border-t border-border bg-white p-5 sm:p-6">
             {loadingSuggestions ? (
                 <div className="flex gap-2 animate-pulse">
                     <div className="h-6 w-16 bg-gray-100 rounded-full" />
@@ -555,15 +650,25 @@ export default function Feed() {
                 <Textarea 
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Write a comment..."
-                    className="h-12 resize-none rounded-xl border-none bg-muted px-4 py-3 font-medium focus-visible:ring-brand-coral/30"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        handlePostComment();
+                      }
+                    }}
+                    placeholder="Reply in this discussion..."
+                    className="min-h-12 resize-none rounded-xl border-none bg-muted px-4 py-3 font-medium focus-visible:ring-brand-coral/30"
                 />
                 <Button 
                     onClick={handlePostComment}
-                    disabled={!newComment.trim()}
+                    disabled={sendingComment || !newComment.trim()}
                     className="h-12 w-12 flex-shrink-0 rounded-xl bg-brand-coral p-0 shadow-sm"
                 >
-                    <Send className="w-5 h-5 text-white" />
+                    {sendingComment ? (
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    ) : (
+                      <Send className="w-5 h-5 text-white" />
+                    )}
                 </Button>
             </div>
           </div>
