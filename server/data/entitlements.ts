@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { config } from '../config.js';
 import { database } from '../database.js';
 import type { AppUserRow, UserPlan } from './schema.js';
 
@@ -43,12 +44,51 @@ const proEntitlements: Record<FeatureKey, Entitlement> = {
   profile_review: { enabled: true, limit: 1, period: 'month' },
 };
 
+const superadminEntitlements: Record<FeatureKey, Entitlement> = {
+  posts_daily: { enabled: true, limit: null, period: null },
+  discover_profiles_daily: { enabled: true, limit: null, period: null },
+  new_chats_daily: { enabled: true, limit: null, period: null },
+  ai_translations_daily: { enabled: true, limit: null, period: null },
+  advanced_filters: { enabled: true, limit: null, period: null },
+  see_interest: { enabled: true, limit: null, period: null },
+  private_mode: { enabled: true, limit: null, period: null },
+  travel_mode: { enabled: true, limit: null, period: null },
+  profile_review: { enabled: true, limit: null, period: null },
+};
+
 export function entitlementsForPlan(plan: UserPlan): Record<FeatureKey, Entitlement> {
   return plan === 'pro' ? proEntitlements : freeEntitlements;
 }
 
-export function getEntitlement(user: AppUserRow, featureKey: FeatureKey): Entitlement {
-  return entitlementsForPlan(user.plan)[featureKey];
+export async function isSuperadminUser(user: AppUserRow): Promise<boolean> {
+  const email = user.email?.trim().toLowerCase();
+  if (!email) return false;
+  const configuredEmail = config.ADMIN_SUPER_EMAIL.trim().toLowerCase();
+  if (configuredEmail && email === configuredEmail) return true;
+
+  const result = await database.query(
+    `
+      SELECT 1
+      FROM admin_users
+      WHERE lower(email) = $1
+        AND role = 'superadmin'
+      LIMIT 1
+    `,
+    [email],
+  );
+  return Boolean(result.rowCount);
+}
+
+export async function effectiveUserPlan(user: AppUserRow): Promise<UserPlan | 'pro_unlimited'> {
+  return await isSuperadminUser(user) ? 'pro_unlimited' : user.plan;
+}
+
+export async function entitlementsForUser(user: AppUserRow): Promise<Record<FeatureKey, Entitlement>> {
+  return await isSuperadminUser(user) ? superadminEntitlements : entitlementsForPlan(user.plan);
+}
+
+export async function getEntitlement(user: AppUserRow, featureKey: FeatureKey): Promise<Entitlement> {
+  return (await entitlementsForUser(user))[featureKey];
 }
 
 export function periodKey(period: 'day' | 'month', now = new Date()): string {
@@ -80,7 +120,8 @@ export async function getUsage(userId: string, featureKey: FeatureKey, period: '
 }
 
 export async function consumeUsage(user: AppUserRow, featureKey: FeatureKey, amount = 1): Promise<void> {
-  const entitlement = getEntitlement(user, featureKey);
+  if (await isSuperadminUser(user)) return;
+  const entitlement = await getEntitlement(user, featureKey);
   if (!entitlement.enabled) {
     const error = new Error('FEATURE_REQUIRES_PRO');
     (error as Error & { status?: number }).status = 402;

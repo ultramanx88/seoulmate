@@ -15,7 +15,7 @@ type FeatureState = {
 };
 
 type EntitlementPayload = {
-  plan: 'free' | 'pro';
+  plan: 'free' | 'pro' | 'pro_unlimited';
   entitlements: Record<string, FeatureState>;
 };
 
@@ -53,6 +53,7 @@ export default function ProPanel() {
   }, []);
 
   const plan = data?.plan ?? 'free';
+  const isUnlimited = plan === 'pro_unlimited';
   const translation = data?.entitlements.ai_translations_daily;
   const discover = data?.entitlements.discover_profiles_daily;
   const chats = data?.entitlements.new_chats_daily;
@@ -72,8 +73,8 @@ export default function ProPanel() {
               Pro is designed for people who want richer filters, more cross-language help, and calmer privacy controls.
             </p>
           </div>
-          <Badge variant="outline" className={plan === 'pro' ? 'border-brand-mint/40 bg-brand-mint/20 text-brand-ink' : 'border-border'}>
-            {plan === 'pro' ? 'Pro active' : 'Free plan'}
+          <Badge variant="outline" className={plan !== 'free' ? 'border-brand-mint/40 bg-brand-mint/20 text-brand-ink' : 'border-border'}>
+            {isUnlimited ? 'Superadmin unlimited' : plan === 'pro' ? 'Pro active' : 'Free plan'}
           </Badge>
         </div>
 
@@ -90,7 +91,7 @@ export default function ProPanel() {
                 <span className="font-bold text-foreground">{label as string}</span>
                 <span className="font-semibold text-muted-foreground">
                   {(feature as FeatureState | undefined)?.limit === null
-                    ? 'Unlimited'
+                    ? isUnlimited ? 'Unlimited admin' : 'Unlimited'
                     : `${(feature as FeatureState | undefined)?.remaining ?? 0} left`}
                 </span>
               </div>
@@ -135,7 +136,7 @@ export default function ProPanel() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-foreground">{feature.title}</h3>
-                {plan === 'pro' && <CheckCircle2 className="size-4 text-brand-mint" />}
+                {plan !== 'free' && <CheckCircle2 className="size-4 text-brand-mint" />}
               </div>
               <p className="mt-1 text-sm font-medium leading-6 text-muted-foreground">{feature.detail}</p>
             </div>

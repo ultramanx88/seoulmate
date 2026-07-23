@@ -12,7 +12,9 @@ import {
 } from './data/repositories/auth-repository.js';
 import {
   consumeUsage,
+  effectiveUserPlan,
   entitlementsForPlan,
+  entitlementsForUser,
   getUsage,
   type FeatureKey,
   setUserPlan,
@@ -260,7 +262,10 @@ function topicJson(row: any, author: AppUserRow | null = null) {
 }
 
 async function entitlementJson(user: AppUserRow) {
-  const entitlements = entitlementsForPlan(user.plan);
+  const [plan, entitlements] = await Promise.all([
+    effectiveUserPlan(user),
+    entitlementsForUser(user),
+  ]);
   const entries = await Promise.all(
     Object.entries(entitlements).map(async ([featureKey, entitlement]) => {
       if (!entitlement.period) {
@@ -280,7 +285,7 @@ async function entitlementJson(user: AppUserRow) {
     }),
   );
   return {
-    plan: user.plan,
+    plan,
     entitlements: Object.fromEntries(entries) as Record<FeatureKey, Entitlement & {
       used: number | null;
       remaining: number | null;
@@ -298,7 +303,7 @@ async function tryConsumeUsage(response: Response, user: AppUserRow, featureKey:
     response.status(status).json({
       error: error instanceof Error ? error.message : 'ENTITLEMENT_ERROR',
       feature: featureKey,
-      plan: user.plan,
+      plan: await effectiveUserPlan(user),
     });
     return false;
   }
