@@ -5,11 +5,12 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent } from './ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Flag, Heart, MessageSquare, Send, Globe, Sparkles, Wand2, UserCheck, Star, Share2 } from 'lucide-react';
+import { Flag, Heart, MessageSquare, Send, Globe, Sparkles, Wand2, UserCheck, Star, Share2, LockKeyhole, SmilePlus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { geminiService } from '../services/gemini';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
+import { basicStickers, getBasicSticker, getStickerLabel, type BasicSticker } from '../data/basic-stickers';
 
 export default function Feed({ translationTarget }: { translationTarget: 'TH' | 'KR' }) {
   const { profile } = useAuth();
@@ -33,9 +34,16 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
   const [newComment, setNewComment] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
   const [sendingComment, setSendingComment] = useState(false);
+  const [discussionStickerTrayOpen, setDiscussionStickerTrayOpen] = useState(false);
+  const [discussionStickerLocale, setDiscussionStickerLocale] = useState<'TH' | 'KR'>(translationTarget);
   const [replySuggestions, setReplySuggestions] = useState<{ style: string; text: string }[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const discussionBottomRef = useRef<HTMLDivElement>(null);
+  const canUseDiscussionStickers = profile?.plan === 'pro' || profile?.plan === 'pro_unlimited';
+
+  useEffect(() => {
+    setDiscussionStickerLocale(translationTarget);
+  }, [translationTarget]);
 
   const fetchRankedFeed = async () => {
     setLoading(true);
@@ -254,6 +262,7 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
     setSelectedPostForComments(post);
     setComments([]);
     setNewComment('');
+    setDiscussionStickerTrayOpen(false);
     setReplySuggestions([]);
 
     await fetchDiscussion(post, { scroll: true });
@@ -307,6 +316,72 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
           : 'Failed to post reply');
     } finally {
         setSendingComment(false);
+    }
+  };
+
+  const stickerToneClass = (tone: BasicSticker['tone']) => {
+    switch (tone) {
+      case 'coral':
+        return 'border-brand-coral/20 bg-brand-blush text-brand-coral';
+      case 'mint':
+        return 'border-brand-mint/30 bg-accent text-accent-foreground';
+      case 'lilac':
+        return 'border-brand-ink/10 bg-brand-lilac text-brand-ink';
+      case 'honey':
+        return 'border-brand-honey/30 bg-amber-50 text-amber-700';
+      case 'ink':
+      default:
+        return 'border-brand-ink/10 bg-white text-brand-ink';
+    }
+  };
+
+  const renderDiscussionSticker = (stickerId: string | null | undefined, fallbackText: string, isMe: boolean) => {
+    const sticker = getBasicSticker(stickerId);
+    if (!sticker) return <span>{fallbackText}</span>;
+
+    return (
+      <div className={`min-w-32 rounded-2xl border p-4 text-center shadow-sm ${stickerToneClass(sticker.tone)} ${isMe ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
+        <div className="text-4xl leading-none">{sticker.emoji}</div>
+        <div className="mt-3 text-sm font-black leading-5">{getStickerLabel(sticker, discussionStickerLocale)}</div>
+      </div>
+    );
+  };
+
+  const sendDiscussionSticker = async (sticker: BasicSticker) => {
+    if (!selectedPostForComments) return;
+    if (!canUseDiscussionStickers) {
+      toast.error('Discussion stickers are a Pro feature');
+      return;
+    }
+
+    setSendingComment(true);
+    try {
+      const result = await apiRequest<{ comment: any; commentsCount?: number }>(`/v1/topics/${selectedPostForComments.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          stickerId: sticker.id,
+          text: getStickerLabel(sticker, discussionStickerLocale),
+        }),
+      });
+      setComments((previous) => [...previous, result.comment]);
+      setPosts((previous) =>
+        previous.map((post) =>
+          post.id === selectedPostForComments.id
+            ? { ...post, commentsCount: result.commentsCount ?? (post.commentsCount || 0) + 1 }
+            : post
+        )
+      );
+      setSelectedPostForComments((current: any | null) =>
+        current ? { ...current, commentsCount: result.commentsCount ?? (current.commentsCount || 0) + 1 } : current
+      );
+      setDiscussionStickerTrayOpen(false);
+      setTimeout(() => discussionBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
+    } catch (error) {
+      toast.error(error instanceof Error && error.message === 'FEATURE_REQUIRES_PRO'
+        ? 'Discussion stickers are a Pro feature'
+        : 'Failed to send sticker');
+    } finally {
+      setSendingComment(false);
     }
   };
 
@@ -606,6 +681,7 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
             {!loadingComments && comments.map((comment) => {
               const isMe = comment.authorId === profile?.uid;
               const createdAt = parseApiDate(comment.createdAt);
+              const isSticker = comment.messageType === 'sticker';
 
               return (
                 <div key={comment.id} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -629,13 +705,17 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
                         </span>
                       )}
                     </div>
-                    <div className={`rounded-2xl p-4 text-sm font-medium leading-6 shadow-sm ${
-                      isMe
-                        ? 'rounded-tr-sm bg-brand-ink text-white'
-                        : 'rounded-tl-sm border border-border bg-white text-foreground'
-                    }`}>
-                      {comment.text}
-                    </div>
+                    {isSticker ? (
+                      renderDiscussionSticker(comment.stickerId, comment.text, isMe)
+                    ) : (
+                      <div className={`rounded-2xl p-4 text-sm font-medium leading-6 shadow-sm ${
+                        isMe
+                          ? 'rounded-tr-sm bg-brand-ink text-white'
+                          : 'rounded-tl-sm border border-border bg-white text-foreground'
+                      }`}>
+                        {comment.text}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -650,6 +730,47 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
           </div>
 
           <div className="space-y-4 border-t border-border bg-white p-5 sm:p-6">
+            {discussionStickerTrayOpen && (
+              <div className="rounded-2xl border border-border bg-muted/35 p-3 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-extrabold text-brand-ink">Pro discussion stickers</p>
+                    <p className="text-xs font-semibold text-muted-foreground">Send reactions into topic replies.</p>
+                  </div>
+                  <div className="inline-flex rounded-xl border border-border bg-white p-1">
+                    {(['TH', 'KR'] as const).map((locale) => (
+                      <button
+                        key={locale}
+                        type="button"
+                        aria-pressed={discussionStickerLocale === locale}
+                        onClick={() => setDiscussionStickerLocale(locale)}
+                        className={`h-8 rounded-lg px-3 text-xs font-black transition ${
+                          discussionStickerLocale === locale ? 'bg-brand-ink text-white' : 'text-muted-foreground hover:bg-muted hover:text-brand-ink'
+                        }`}
+                      >
+                        {locale}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {basicStickers.map((sticker) => (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      onClick={() => sendDiscussionSticker(sticker)}
+                      disabled={sendingComment || !canUseDiscussionStickers}
+                      aria-label={`Send ${getStickerLabel(sticker, discussionStickerLocale)} sticker to discussion`}
+                      className={`min-h-20 rounded-2xl border p-2 text-center transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:pointer-events-none disabled:opacity-60 ${stickerToneClass(sticker.tone)}`}
+                    >
+                      <div className="text-2xl leading-none">{sticker.emoji}</div>
+                      <div className="mt-2 line-clamp-2 text-[11px] font-black leading-4">{getStickerLabel(sticker, discussionStickerLocale)}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {loadingSuggestions ? (
                 <div className="flex gap-2 animate-pulse">
                     <div className="h-6 w-16 bg-gray-100 rounded-full" />
@@ -672,6 +793,22 @@ export default function Feed({ translationTarget }: { translationTarget: 'TH' | 
             )}
 
             <div className="flex gap-2">
+                <Button
+                    aria-label={discussionStickerTrayOpen ? 'Close discussion stickers' : 'Open discussion stickers'}
+                    aria-pressed={discussionStickerTrayOpen}
+                    onClick={() => {
+                      if (!canUseDiscussionStickers) {
+                        toast.error('Discussion stickers are a Pro feature');
+                        return;
+                      }
+                      setDiscussionStickerTrayOpen((open) => !open);
+                    }}
+                    variant="outline"
+                    className={`h-12 w-12 flex-shrink-0 rounded-xl p-0 ${canUseDiscussionStickers ? 'text-brand-coral' : 'text-muted-foreground'}`}
+                    title={canUseDiscussionStickers ? 'Pro stickers' : 'Pro stickers only'}
+                >
+                    {canUseDiscussionStickers ? <SmilePlus className="w-5 h-5" /> : <LockKeyhole className="w-5 h-5" />}
+                </Button>
                 <Textarea 
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}

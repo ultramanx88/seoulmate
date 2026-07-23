@@ -548,7 +548,9 @@ export function createApiRouter(): Router {
       response.status(401).json({ error: 'UNAUTHENTICATED' });
       return;
     }
-    response.json({ user: toUserProfile(user), profile: toUserProfile(user) });
+    const profile = toUserProfile(user);
+    profile.plan = await effectiveUserPlan(user);
+    response.json({ user: profile, profile });
   });
 
   router.put('/v1/me/profile', async (request, response) => {
@@ -750,6 +752,9 @@ export function createApiRouter(): Router {
           c.id,
           c.author_id,
           c.text,
+          c.message_type,
+          c.sticker_id,
+          c.metadata,
           c.created_at,
           u.display_name AS author_name,
           u.photo_url AS author_photo,
@@ -768,6 +773,9 @@ export function createApiRouter(): Router {
         id: row.id,
         authorId: row.author_id,
         text: row.text,
+        messageType: row.message_type ?? 'text',
+        stickerId: row.sticker_id,
+        metadata: row.metadata ?? {},
         createdAt: dateJson(row.created_at),
         authorName: row.author_name,
         authorPhoto: row.author_photo,
@@ -780,9 +788,16 @@ export function createApiRouter(): Router {
   router.post('/v1/topics/:topicId/comments', async (request, response) => {
     const user = await requireUser(request, response);
     if (!user) return;
-    const body = request.body as { text?: string };
+    const body = request.body as { text?: string; stickerId?: string };
+    const stickerId = body.stickerId?.trim();
+    const isSticker = Boolean(stickerId);
     const text = body.text?.trim() ?? '';
-    if (!text) {
+    if (isSticker && (!stickerId || !basicStickerIds.has(stickerId))) {
+      response.status(400).json({ error: 'STICKER_NOT_FOUND' });
+      return;
+    }
+    if (isSticker && !await tryConsumeUsage(response, user, 'see_interest')) return;
+    if (!isSticker && !text) {
       response.status(400).json({ error: 'TEXT_REQUIRED' });
       return;
     }
@@ -791,6 +806,8 @@ export function createApiRouter(): Router {
       return;
     }
     const id = randomUUID();
+    const commentText = isSticker ? (text || 'Sticker') : text;
+    const messageType = isSticker ? 'sticker' : 'text';
     const client = await database.connect();
     try {
       await client.query('BEGIN');
@@ -810,8 +827,12 @@ export function createApiRouter(): Router {
         return;
       }
       const inserted = await client.query(
-        'INSERT INTO comments (id, topic_id, author_id, text) VALUES ($1, $2, $3, $4) RETURNING *',
-        [id, request.params.topicId, user.id, text],
+        `
+          INSERT INTO comments (id, topic_id, author_id, text, message_type, sticker_id, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+          RETURNING *
+        `,
+        [id, request.params.topicId, user.id, commentText, messageType, stickerId ?? null, '{}'],
       );
       const topicUpdate = await client.query(
         'UPDATE topics SET comments_count = comments_count + 1 WHERE id = $1 RETURNING comments_count',
@@ -823,6 +844,9 @@ export function createApiRouter(): Router {
           id: inserted.rows[0].id,
           authorId: user.id,
           text: inserted.rows[0].text,
+          messageType: inserted.rows[0].message_type ?? 'text',
+          stickerId: inserted.rows[0].sticker_id,
+          metadata: inserted.rows[0].metadata ?? {},
           createdAt: dateJson(inserted.rows[0].created_at),
           authorName: user.display_name,
           authorPhoto: user.photo_url,

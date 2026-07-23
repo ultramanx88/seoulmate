@@ -56,7 +56,7 @@ export type PublicUserProfile = {
   languages: string[];
   bio: string;
   safetyStatus: 'active' | 'suspended' | 'banned' | 'deleted';
-  plan: UserPlan;
+  plan: UserPlan | 'pro_unlimited';
   isProfileComplete: boolean;
   lastActiveAt: string | null;
   createdAt: string;

@@ -37,6 +37,7 @@ interface UserProfile {
   interests?: string[];
   languages?: string[];
   bio?: string;
+  plan?: 'free' | 'pro' | 'pro_unlimited';
   isProfileComplete: boolean;
   lastActiveAt?: string | null;
 }
